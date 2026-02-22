@@ -105,9 +105,10 @@ The tool provides informative logging:
 ```
 INFO: Starting archiver: /source -> /destination
 INFO: Found 42 media file(s) to process
-INFO: Copied: GOPR1234.MP4 -> 20240222-143025.456.mp4
-WARNING: File skipped (already exists): GOPR1235.MP4 -> 20240222-143126.789.mp4
-INFO: Processing complete: 40 copied, 2 skipped/failed
+INFO: Copied: GOPR1234.MP4 -> 20240222-143025-camera.mp4
+INFO: Copied: DJI_0001.MOV -> 20240222-143126-drone.mov
+INFO: Copied: audio.wav -> 20240222-143200-audio.wav
+INFO: Processing complete: 42 copied, 0 skipped/failed
 ```
 
 ## Requirements
