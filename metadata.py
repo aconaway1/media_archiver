@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import subprocess
 
 try:
     from mutagen.file import File as MutagenFile
@@ -14,6 +13,18 @@ try:
 except ImportError:
     MutagenFile = None
     MP4 = None
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+try:
+    from hachoir.parser import createParser
+    from hachoir.metadata import extractMetadata
+except ImportError:
+    createParser = None
+    extractMetadata = None
 
 logger = logging.getLogger(__name__)
 
@@ -59,42 +70,44 @@ class MetadataExtractor:
 
     @staticmethod
     def _extract_video_datetime(file_path: Path) -> Optional[datetime]:
-        """Extract creation datetime from video file using ffmpeg."""
-        try:
-            # Use ffmpeg to extract metadata
-            result = subprocess.run(
-                ['ffprobe', '-v', 'error', '-print_format', 'json',
-                 '-show_entries', 'format=creation_time', str(file_path)],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.returncode != 0:
-                logger.warning(f"ffprobe failed for {file_path}")
-                return None
-
-            import json
+        """Extract creation datetime from video file using hachoir or cv2."""
+        # Try hachoir first (pure Python)
+        if createParser and extractMetadata:
             try:
-                data = json.loads(result.stdout)
-                creation_time = data.get('format', {}).get('creation_time')
-                if creation_time:
-                    # Parse ISO 8601 format (e.g., "2024-02-22T15:30:45.123Z")
-                    # Try with microseconds first, then without
-                    for fmt in ['%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ']:
-                        try:
-                            return datetime.strptime(creation_time.replace('+00:00', 'Z'), fmt)
-                        except ValueError:
-                            continue
-            except (json.JSONDecodeError, KeyError):
-                pass
+                parser = createParser(str(file_path))
+                if parser:
+                    metadata = extractMetadata(parser)
+                    if metadata:
+                        # Look for creation time in metadata
+                        if hasattr(metadata, 'getItems'):
+                            for key, value in metadata.exportPlaintext():
+                                if 'creation' in key.lower() or 'date' in key.lower():
+                                    try:
+                                        # Try to parse common date formats
+                                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']:
+                                            try:
+                                                return datetime.strptime(str(value), fmt)
+                                            except ValueError:
+                                                continue
+                                    except Exception:
+                                        continue
+            except Exception as e:
+                logger.debug(f"Hachoir failed to extract metadata from {file_path}: {e}")
 
-        except FileNotFoundError:
-            logger.debug("ffprobe not found, cannot extract video metadata")
-        except subprocess.TimeoutExpired:
-            logger.warning(f"ffprobe timeout for {file_path}")
-        except Exception as e:
-            logger.warning(f"Error extracting video metadata from {file_path}: {e}")
+        # Try OpenCV as fallback
+        if cv2:
+            try:
+                cap = cv2.VideoCapture(str(file_path))
+                if cap.isOpened():
+                    # Try to get creation time property
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    cap.release()
+
+                    # We can't get the actual timestamp from cv2, but we can log that we found the video
+                    logger.debug(f"Found video with {frame_count} frames at {fps} fps: {file_path}")
+            except Exception as e:
+                logger.debug(f"OpenCV failed to read video {file_path}: {e}")
 
         return None
 

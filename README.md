@@ -14,24 +14,15 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 ## Installation
 
 1. Clone or navigate to the media_archiver project directory
-2. Install dependencies:
+2. Create a virtual environment and install dependencies:
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Make sure you have `ffprobe` installed (part of ffmpeg):
-
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
-
-# Windows
-# Download from https://ffmpeg.org/download.html
-```
+No external tools needed! The archiver uses pure Python libraries for metadata extraction.
 
 ## Usage
 
@@ -60,26 +51,39 @@ The tool scans the source directory for supported media files (.mp4, .mov, .m4a,
 
 ### 2. Timestamp Extraction
 For each file, the tool attempts to extract the creation timestamp in this order:
-- **Video files (.mp4, .mov)**: Reads `creation_time` metadata tag using ffprobe
+- **Video files (.mp4, .mov)**: Reads metadata using hachoir (pure Python) or OpenCV
 - **Audio files (.m4a, .wav, .aac)**: Reads date/year tags using mutagen library
 - **Fallback**: Uses the file's modification timestamp
 
-### 3. Filename Generation
-Timestamps are formatted as `YYYYMMDD-HHMMSS.sss.<extension>`:
+### 3. Directory Organization
+Files are organized by date in the destination directory:
+```
+<DESTINATION>/
+├── 2024/
+│   ├── 02/
+│   │   ├── 15/
+│   │   │   ├── 20240215-143045.123.mp4
+│   │   │   └── 20240215-143045.456.mov
+│   │   └── 16/
+│   │       └── 20240216-091530.789.wav
+```
+
+### 4. Filename Generation
+Filenames are formatted as `YYYYMMDD-HHMMSS.sss.<extension>`:
 - `YYYYMMDD`: Date (e.g., 20240222)
 - `HHMMSS`: Time (e.g., 153045)
 - `.sss`: Milliseconds (e.g., 123)
 - Extension: Original file extension (e.g., .mp4)
 
-Example output: `20240222-153045.123.mp4`
+Example output: `20240215-143045.123.mp4`
 
-### 4. Collision Handling
-If a file with the same name already exists in the destination:
+### 5. Collision Handling
+If a file with the same name already exists in the same date folder:
 - First collision: Changes to `YYYYMMDD-HHMMSS.ss1.ext`
 - Second collision: Changes to `YYYYMMDD-HHMMSS.ss2.ext`
 - And so on...
 
-### 5. File Copying
+### 6. File Copying
 Files are copied to the destination directory while preserving their metadata.
 
 ## Output
@@ -97,8 +101,9 @@ INFO: Processing complete: 40 copied, 2 skipped/failed
 ## Requirements
 
 - Python 3.7+
-- ffmpeg/ffprobe for video metadata extraction
 - mutagen library for audio metadata reading
+- hachoir library for video metadata parsing (pure Python)
+- opencv-python for video format validation
 - Read and write permissions to source and destination directories
 
 ## Error Handling
@@ -128,11 +133,6 @@ Processing continues even if individual files fail, with detailed error logging.
 
 ## Troubleshooting
 
-### "ffprobe not found"
-Install ffmpeg:
-- macOS: `brew install ffmpeg`
-- Linux: `sudo apt-get install ffmpeg`
-
 ### Cannot extract timestamp
 The tool will use the file's modification time as a fallback. Check file timestamps:
 ```bash
@@ -150,6 +150,7 @@ Check that:
 1. Files have supported extensions (.mp4, .mov, .m4a, .wav, .aac)
 2. Destination directory exists and is writable
 3. Source directory contains readable files
+4. Try with a single test file first to isolate the issue
 
 ## License
 

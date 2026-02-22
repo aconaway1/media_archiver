@@ -1,1 +1,3 @@
 mutagen>=1.46.0
+hachoir>=1.2.0
+opencv-python>=4.5.0

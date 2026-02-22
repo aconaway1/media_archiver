@@ -21,7 +21,7 @@ class FileNamer:
         """
         Generate a destination filename with collision handling.
 
-        Format: YYYYMMDD-HHMMSS.sss.ext
+        Format: <DESTINATION>/YYYY/MM/DD/YYYYMMDD-HHMMSS.sss.ext
         On collision: YYYYMMDD-HHMMSS.ss1.ext, YYYYMMDD-HHMMSS.ss2.ext, etc.
 
         Args:
@@ -31,11 +31,24 @@ class FileNamer:
         Returns:
             Path object for the destination file
         """
+        # Create date-based subdirectory structure
+        year = dt.strftime('%Y')
+        month = dt.strftime('%m')
+        day = dt.strftime('%d')
+        date_dir = self.destination_dir / year / month / day
+
+        # Create directory if it doesn't exist
+        try:
+            date_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create directory {date_dir}: {e}")
+            raise
+
         # Format base filename: YYYYMMDD-HHMMSS.sss
         base_name = dt.strftime('%Y%m%d-%H%M%S') + f'.{dt.microsecond // 1000:03d}'
         base_filename = base_name + original_extension
 
-        destination = self.destination_dir / base_filename
+        destination = date_dir / base_filename
 
         # If file doesn't exist, return it
         if not destination.exists():
@@ -47,7 +60,7 @@ class FileNamer:
         while counter < 1000:  # Safety limit
             # Format: YYYYMMDD-HHMMSS.ss1.ext becomes .ss1, .ss2, etc.
             collision_filename = f"{base_name}.ss{counter}{original_extension}"
-            destination = self.destination_dir / collision_filename
+            destination = date_dir / collision_filename
 
             if not destination.exists():
                 logger.info(f"Using collision-avoided filename: {collision_filename}")
