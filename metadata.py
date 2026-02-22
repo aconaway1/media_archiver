@@ -26,6 +26,13 @@ except ImportError:
     createParser = None
     extractMetadata = None
 
+try:
+    from PIL import Image
+    from PIL.ExifTags import TAGS
+except ImportError:
+    Image = None
+    TAGS = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,6 +42,8 @@ class MetadataExtractor:
     # Supported file extensions
     AUDIO_EXTENSIONS = {'.m4a', '.wav', '.aac', '.mp3'}
     VIDEO_EXTENSIONS = {'.mp4', '.mov'}
+    IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
+    RAW_IMAGE_EXTENSIONS = {'.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
 
     @staticmethod
     def get_datetime(file_path: Path, extension: str) -> Optional[datetime]:
@@ -63,6 +72,11 @@ class MetadataExtractor:
             if dt:
                 logger.debug(f"Extracted datetime from audio metadata: {file_path}")
                 return dt
+        elif ext_lower in MetadataExtractor.IMAGE_EXTENSIONS or ext_lower in MetadataExtractor.RAW_IMAGE_EXTENSIONS:
+            dt = MetadataExtractor._extract_image_datetime(file_path)
+            if dt:
+                logger.debug(f"Extracted datetime from image metadata: {file_path}")
+                return dt
 
         # Fallback to file modification time
         logger.debug(f"Using file modification time as fallback: {file_path}")
@@ -73,7 +87,7 @@ class MetadataExtractor:
         """
         Detect device type from filename and/or metadata.
 
-        Returns one of: 'camera', 'drone', 'audio', or 'unknown'
+        Returns one of: 'camera', 'drone', 'audio', 'image', or 'unknown'
 
         Args:
             file_path: Path to the media file
@@ -90,7 +104,14 @@ class MetadataExtractor:
             return 'camera'
 
         if filename.startswith('DJI'):
+            # Could be drone video or image
+            if ext_lower in MetadataExtractor.IMAGE_EXTENSIONS or ext_lower in MetadataExtractor.RAW_IMAGE_EXTENSIONS:
+                return 'image'
             return 'drone'
+
+        # Image files
+        if ext_lower in MetadataExtractor.IMAGE_EXTENSIONS or ext_lower in MetadataExtractor.RAW_IMAGE_EXTENSIONS:
+            return 'image'
 
         # Audio files default to 'audio'
         if ext_lower in MetadataExtractor.AUDIO_EXTENSIONS:
@@ -216,6 +237,33 @@ class MetadataExtractor:
 
         except Exception as e:
             logger.warning(f"Error extracting audio metadata from {file_path}: {e}")
+
+        return None
+
+    @staticmethod
+    def _extract_image_datetime(file_path: Path) -> Optional[datetime]:
+        """Extract creation datetime from image file using EXIF metadata."""
+        if Image is None:
+            logger.debug("Pillow not installed, cannot extract image EXIF metadata")
+            return None
+
+        try:
+            image = Image.open(str(file_path))
+            exif_data = image._getexif()
+
+            if exif_data:
+                # Look for DateTime tags (EXIF tag 306 is DateTime)
+                for tag_id, value in exif_data.items():
+                    tag_name = TAGS.get(tag_id, tag_id)
+                    if tag_name in ['DateTime', 'DateTimeOriginal', 'DateTimeDigitized']:
+                        try:
+                            # EXIF dates are in format: "YYYY:MM:DD HH:MM:SS"
+                            return datetime.strptime(str(value), '%Y:%m:%d %H:%M:%S')
+                        except (ValueError, TypeError):
+                            continue
+
+        except Exception as e:
+            logger.warning(f"Error extracting image metadata from {file_path}: {e}")
 
         return None
 

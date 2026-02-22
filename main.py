@@ -79,6 +79,11 @@ Examples:
         required=True,
         help='Destination directory where renamed files will be copied'
     )
+    parser.add_argument(
+        '--skip-raw',
+        action='store_true',
+        help='Skip raw image files (.raw, .dng, .cr2, .nef, .arw, .gpr)'
+    )
 
     args = parser.parse_args()
 
@@ -88,7 +93,7 @@ Examples:
 
     # Run archiver
     try:
-        archiver = Archiver(args.source, args.destination)
+        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw)
         archiver.run()
     except Exception as e:
         logger.error(f"Unexpected error: {e}")

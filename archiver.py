@@ -76,11 +76,12 @@ class FileNamer:
 class Archiver:
     """Main archiver that orchestrates file discovery, renaming, and copying."""
 
-    SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac'}
+    SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
 
-    def __init__(self, source_dir: Path, destination_dir: Path):
+    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False):
         self.source_dir = Path(source_dir)
         self.destination_dir = Path(destination_dir)
+        self.skip_raw = skip_raw
         self.file_namer = FileNamer(self.destination_dir)
         self.metadata_extractor = MetadataExtractor()
 
@@ -114,10 +115,15 @@ class Archiver:
     def _discover_media_files(self) -> list[Path]:
         """Discover all supported media files in source directory."""
         media_files = []
+        raw_extensions = {'.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
 
         try:
             for file_path in self.source_dir.iterdir():
                 if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
+                    # Skip raw files if requested
+                    if self.skip_raw and file_path.suffix.lower() in raw_extensions:
+                        logger.debug(f"Skipping raw file (--skip-raw enabled): {file_path.name}")
+                        continue
                     media_files.append(file_path)
         except PermissionError:
             logger.error(f"Permission denied reading source directory: {self.source_dir}")
