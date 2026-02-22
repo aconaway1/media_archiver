@@ -55,6 +55,15 @@ For each file, the tool attempts to extract the creation timestamp in this order
 - **Audio files (.m4a, .wav, .aac)**: Reads date/year tags using mutagen library
 - **Fallback**: Uses the file's modification timestamp
 
+### 2b. Device Type Detection
+The tool identifies the source device using multiple strategies:
+- **Filename patterns**: Detects GoPro files (GOPR*, GP*) and DJI files (DJI*)
+- **Metadata tags**: Searches video metadata for manufacturer info (DJI, GoPro, HERO)
+- **File type**: Audio-only files (M4A, WAV, AAC) default to 'audio'
+- **Default**: Unidentified video files default to 'camera'
+
+Device types include: `camera`, `drone`, `audio`, or `unknown`
+
 ### 3. Directory Organization
 Files are organized by date in the destination directory:
 ```
@@ -62,25 +71,28 @@ Files are organized by date in the destination directory:
 ├── 2024/
 │   ├── 02/
 │   │   ├── 15/
-│   │   │   ├── 20240215-143045.123.mp4
-│   │   │   └── 20240215-143045.456.mov
+│   │   │   ├── 20240215-143045-camera.mp4
+│   │   │   └── 20240215-143045-drone.mov
 │   │   └── 16/
-│   │       └── 20240216-091530.789.wav
+│   │       └── 20240216-091530-audio.wav
 ```
 
 ### 4. Filename Generation
-Filenames are formatted as `YYYYMMDD-HHMMSS.sss.<extension>`:
-- `YYYYMMDD`: Date (e.g., 20240222)
-- `HHMMSS`: Time (e.g., 153045)
-- `.sss`: Milliseconds (e.g., 123)
+Filenames are formatted as `YYYYMMDD-HHMMSS-<device_type>.<extension>`:
+- `YYYYMMDD`: Date (e.g., 20240215)
+- `HHMMSS`: Time (e.g., 143045)
+- `<device_type>`: Device type (e.g., camera, drone, audio)
 - Extension: Original file extension (e.g., .mp4)
 
-Example output: `20240215-143045.123.mp4`
+Example outputs:
+- `20240215-143045-camera.mp4` (GoPro video)
+- `20240215-143045-drone.mov` (DJI drone footage)
+- `20240216-091530-audio.wav` (Tascam audio recording)
 
 ### 5. Collision Handling
 If a file with the same name already exists in the same date folder:
-- First collision: Changes to `YYYYMMDD-HHMMSS.ss1.ext`
-- Second collision: Changes to `YYYYMMDD-HHMMSS.ss2.ext`
+- First collision: Changes to `YYYYMMDD-HHMMSS-<device_type>.1.ext`
+- Second collision: Changes to `YYYYMMDD-HHMMSS-<device_type>.2.ext`
 - And so on...
 
 ### 6. File Copying

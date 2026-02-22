@@ -69,6 +69,66 @@ class MetadataExtractor:
         return MetadataExtractor._get_file_datetime(file_path)
 
     @staticmethod
+    def get_device_type(file_path: Path, extension: str) -> str:
+        """
+        Detect device type from filename and/or metadata.
+
+        Returns one of: 'camera', 'drone', 'audio', or 'unknown'
+
+        Args:
+            file_path: Path to the media file
+            extension: File extension (e.g., '.mp4')
+
+        Returns:
+            Device type string
+        """
+        filename = file_path.name.upper()
+        ext_lower = extension.lower()
+
+        # Check filename patterns first
+        if filename.startswith('GOPR') or filename.startswith('GP'):
+            return 'camera'
+
+        if filename.startswith('DJI'):
+            return 'drone'
+
+        # Audio files default to 'audio'
+        if ext_lower in MetadataExtractor.AUDIO_EXTENSIONS:
+            return 'audio'
+
+        # Try to extract device type from video metadata
+        if ext_lower in MetadataExtractor.VIDEO_EXTENSIONS:
+            device_type = MetadataExtractor._detect_video_device(file_path)
+            if device_type:
+                return device_type
+
+        # Default to 'camera' for video files without device detection
+        if ext_lower in MetadataExtractor.VIDEO_EXTENSIONS:
+            return 'camera'
+
+        return 'unknown'
+
+    @staticmethod
+    def _detect_video_device(file_path: Path) -> Optional[str]:
+        """Try to detect video device type from metadata."""
+        if createParser and extractMetadata:
+            try:
+                parser = createParser(str(file_path))
+                if parser:
+                    metadata = extractMetadata(parser)
+                    if metadata:
+                        for key, value in metadata.exportPlaintext():
+                            value_str = str(value).upper()
+                            if 'DJI' in value_str:
+                                return 'drone'
+                            if 'GOPRO' in value_str or 'HERO' in value_str:
+                                return 'camera'
+            except Exception:
+                pass
+
+        return None
+
+    @staticmethod
     def _extract_video_datetime(file_path: Path) -> Optional[datetime]:
         """Extract creation datetime from video file using hachoir or cv2."""
         # Try hachoir first (pure Python)
