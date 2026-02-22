@@ -68,9 +68,9 @@ The tool identifies the source device using multiple strategies:
 - **Filename patterns**: Detects GoPro files (GOPR*, GP*) and DJI files (DJI*)
 - **Metadata tags**: Searches video metadata for manufacturer info (DJI, GoPro, HERO)
 - **File type**: Audio-only files (M4A, WAV, AAC) default to 'audio'; image files default to 'image'
-- **Default**: Unidentified video files default to 'camera'
+- **Default**: Unidentified video files default to 'video'
 
-Device types include: `camera`, `drone`, `audio`, `image`, or `unknown`
+Device types include: `video`, `drone`, `audio`, `image`, or `unknown`
 
 ### 3. Directory Organization
 Files are organized by date in the destination directory:
@@ -79,7 +79,7 @@ Files are organized by date in the destination directory:
 ├── 2024/
 │   ├── 02/
 │   │   ├── 15/
-│   │   │   ├── 20240215-143045-camera.mp4
+│   │   │   ├── 20240215-143045-video.mp4
 │   │   │   ├── 20240215-143045-drone.mov
 │   │   │   ├── 20240215-143215-image.jpg
 │   │   │   └── 20240215-143245-image.png
@@ -91,11 +91,11 @@ Files are organized by date in the destination directory:
 Filenames are formatted as `YYYYMMDD-HHMMSS-<device_type>.<extension>`:
 - `YYYYMMDD`: Date (e.g., 20240215)
 - `HHMMSS`: Time (e.g., 143045)
-- `<device_type>`: Device type (e.g., camera, drone, audio)
+- `<device_type>`: Device type (e.g., video, drone, audio, image)
 - Extension: Original file extension (e.g., .mp4)
 
 Example outputs:
-- `20240215-143045-camera.mp4` (GoPro video)
+- `20240215-143045-video.mp4` (GoPro video)
 - `20240215-143045-drone.mov` (DJI drone footage)
 - `20240215-143215-image.jpg` (Photo from camera or drone)
 - `20240216-091530-audio.wav` (Tascam audio recording)
@@ -116,7 +116,7 @@ The tool provides informative logging:
 ```
 INFO: Starting archiver: /source -> /destination
 INFO: Found 42 media file(s) to process
-INFO: Copied: GOPR1234.MP4 -> 20240222-143025-camera.mp4
+INFO: Copied: GOPR1234.MP4 -> 20240222-143025-video.mp4
 INFO: Copied: DJI_0001.MOV -> 20240222-143126-drone.mov
 INFO: Copied: audio.wav -> 20240222-143200-audio.wav
 INFO: Processing complete: 42 copied, 0 skipped/failed

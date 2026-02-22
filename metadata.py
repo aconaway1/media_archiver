@@ -87,7 +87,7 @@ class MetadataExtractor:
         """
         Detect device type from filename and/or metadata.
 
-        Returns one of: 'camera', 'drone', 'audio', 'image', or 'unknown'
+        Returns one of: 'video', 'drone', 'audio', 'image', or 'unknown'
 
         Args:
             file_path: Path to the media file
@@ -101,7 +101,7 @@ class MetadataExtractor:
 
         # Check filename patterns first
         if filename.startswith('GOPR') or filename.startswith('GP'):
-            return 'camera'
+            return 'video'
 
         if filename.startswith('DJI'):
             # Could be drone video or image
@@ -123,9 +123,9 @@ class MetadataExtractor:
             if device_type:
                 return device_type
 
-        # Default to 'camera' for video files without device detection
+        # Default to 'video' for video files without device detection
         if ext_lower in MetadataExtractor.VIDEO_EXTENSIONS:
-            return 'camera'
+            return 'video'
 
         return 'unknown'
 
@@ -143,7 +143,7 @@ class MetadataExtractor:
                             if 'DJI' in value_str:
                                 return 'drone'
                             if 'GOPRO' in value_str or 'HERO' in value_str:
-                                return 'camera'
+                                return 'video'
             except Exception:
                 pass
 
