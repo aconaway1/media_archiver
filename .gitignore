@@ -136,3 +136,4 @@ Thumbs.db
 # Test directories
 test_source/
 test_destination/
+samples/
