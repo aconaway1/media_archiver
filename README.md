@@ -196,3 +196,9 @@ Check that:
 ## License
 
 MIT License
+
+## Development
+
+This project was developed with assistance from [Claude AI](https://claude.ai). The architecture design, implementation, testing, and documentation were guided by Claude to ensure best practices, comprehensive test coverage, and production-ready code quality.
+
+All commits include co-author attribution: `Co-Authored-By: Claude <noreply@anthropic.com>`
