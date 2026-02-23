@@ -7,7 +7,7 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 - **Standardized Naming**: Renames media files to `YYYYMMDD-HHMMSS-<device_type>.ext` format with device identification
 - **Smart Timestamp Extraction**: Extracts creation timestamps from file metadata with intelligent fallback to file modification time
 - **Collision Handling**: Automatically handles naming conflicts with incrementing suffixes
-- **File Type Support**: MP4, MOV, M4A, WAV, AAC, and image files (JPG, JPEG, PNG, and RAW formats: DNG, CR2, NEF, ARW, GPR)
+- **File Type Support**: Video (MP4, MOV), Audio (M4A, WAV, AAC), and Images (JPG, PNG, RAW formats)
 - **Safe Operations**: Copies files (preserves originals) rather than moving them
 - **Smart Skipping**: Skips files that already exist in the destination with informative messaging
 - **Optional Raw Image Skipping**: Use `--skip-raw` flag to exclude raw image files if needed
