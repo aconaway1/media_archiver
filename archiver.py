@@ -1,8 +1,10 @@
 """
 Core archiving logic for renaming and copying media files.
 """
+import hashlib
 import logging
 import shutil
+import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -112,6 +114,15 @@ class Archiver:
 
         logger.info(f"Processing complete: {processed} copied, {skipped} skipped/failed")
 
+    @staticmethod
+    def _calculate_sha256(file_path: Path) -> str:
+        """Calculate SHA256 hash of a file."""
+        sha256_hash = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+
     def _discover_media_files(self) -> list[Path]:
         """Discover all supported media files in source directory."""
         media_files = []
@@ -155,11 +166,50 @@ class Archiver:
             logger.info(f"Skipping {source_file.name}: destination already exists ({destination_file.name})")
             return False
 
-        # Copy file
-        try:
-            shutil.copy2(source_file, destination_file)
-            logger.info(f"Copied: {source_file.name} -> {destination_file.name}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to copy {source_file.name}: {e}")
-            return False
+        # Copy file with retry logic (up to 3 attempts)
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                shutil.copy2(source_file, destination_file)
+
+                # Verify copy integrity with checksum
+                source_hash = self._calculate_sha256(source_file)
+                dest_hash = self._calculate_sha256(destination_file)
+
+                if source_hash != dest_hash:
+                    logger.warning(f"Checksum mismatch for {source_file.name} (attempt {attempt}/{max_retries}): retrying...")
+                    # Clean up bad copy before retry
+                    try:
+                        destination_file.unlink()
+                    except Exception:
+                        pass
+                    if attempt < max_retries:
+                        time.sleep(1)  # Wait 1 second before retry
+                        continue
+                    else:
+                        logger.error(f"Checksum mismatch for {source_file.name}: copy failed after {max_retries} attempts, deleting corrupted file")
+                        try:
+                            destination_file.unlink()
+                        except Exception:
+                            pass
+                        return False
+
+                logger.info(f"Copied: {source_file.name} -> {destination_file.name}")
+                return True
+
+            except Exception as e:
+                logger.warning(f"Failed to copy {source_file.name} (attempt {attempt}/{max_retries}): {e}")
+                # Clean up any partial copy before retry
+                try:
+                    if destination_file.exists():
+                        destination_file.unlink()
+                except Exception:
+                    pass
+                if attempt < max_retries:
+                    time.sleep(1)  # Wait 1 second before retry
+                    continue
+                else:
+                    logger.error(f"Failed to copy {source_file.name}: all {max_retries} attempts failed")
+                    return False
+
+        return False
