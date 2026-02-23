@@ -14,17 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class FileNamer:
-    """Handles destination filename generation with collision detection."""
+    """Handles destination filename generation."""
 
     def __init__(self, destination_dir: Path):
         self.destination_dir = destination_dir
 
     def get_destination_filename(self, dt: datetime, original_extension: str, device_type: str) -> Path:
         """
-        Generate a destination filename with collision handling.
+        Generate a destination filename.
 
         Format: <DESTINATION>/YYYY/MM/DD/YYYYMMDD-HHMMSS-<device_type>.ext
-        On collision: YYYYMMDD-HHMMSS-<device_type>.1.ext, .2.ext, etc.
 
         Args:
             dt: datetime object
@@ -32,7 +31,7 @@ class FileNamer:
             device_type: device type string (e.g., 'camera', 'drone', 'audio')
 
         Returns:
-            Path object for the destination file
+            Path object for the destination file (base name without collision handling)
         """
         # Create date-based subdirectory structure
         year = dt.strftime('%Y')
@@ -51,28 +50,40 @@ class FileNamer:
         base_name = dt.strftime('%Y%m%d-%H%M%S') + f'-{device_type}'
         base_filename = base_name + original_extension
 
-        destination = date_dir / base_filename
+        return date_dir / base_filename
 
-        # If file doesn't exist, return it
-        if not destination.exists():
-            return destination
+    def get_next_available_filename(self, base_path: Path) -> Path:
+        """
+        Find the next available filename by adding collision suffix if needed.
+
+        Args:
+            base_path: The base destination path
+
+        Returns:
+            Path object for an available filename
+        """
+        if not base_path.exists():
+            return base_path
 
         # Handle collision with incrementing suffix
-        logger.warning(f"Destination file already exists: {base_filename}")
+        date_dir = base_path.parent
+        base_name = base_path.stem
+        extension = base_path.suffix
+
+        logger.warning(f"Destination file already exists: {base_path.name}")
         counter = 1
         while counter < 1000:  # Safety limit
-            # Format: YYYYMMDD-HHMMSS-<device_type>.1.ext becomes .1, .2, etc.
-            collision_filename = f"{base_name}.{counter}{original_extension}"
-            destination = date_dir / collision_filename
+            collision_filename = f"{base_name}.{counter}{extension}"
+            collision_path = date_dir / collision_filename
 
-            if not destination.exists():
+            if not collision_path.exists():
                 logger.info(f"Using collision-avoided filename: {collision_filename}")
-                return destination
+                return collision_path
 
             counter += 1
 
         # Should not reach here
-        raise RuntimeError(f"Could not find available filename for timestamp {base_name}")
+        raise RuntimeError(f"Could not find available filename for {base_path.name}")
 
 
 class Archiver:
@@ -80,10 +91,11 @@ class Archiver:
 
     SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
 
-    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False):
+    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False):
         self.source_dir = Path(source_dir)
         self.destination_dir = Path(destination_dir)
         self.skip_raw = skip_raw
+        self.overwrite = overwrite
         self.file_namer = FileNamer(self.destination_dir)
         self.metadata_extractor = MetadataExtractor()
 
@@ -158,13 +170,35 @@ class Archiver:
         # Detect device type
         device_type = self.metadata_extractor.get_device_type(source_file, source_file.suffix)
 
-        # Generate destination filename
-        destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type)
+        # Generate base destination filename (without collision handling)
+        base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type)
 
         # Check if destination already exists
-        if destination_file.exists():
-            logger.info(f"Skipping {source_file.name}: destination already exists ({destination_file.name})")
-            return False
+        if base_destination_file.exists():
+            # Compare checksums
+            source_hash = self._calculate_sha256(source_file)
+            dest_hash = self._calculate_sha256(base_destination_file)
+
+            if source_hash == dest_hash:
+                logger.info(f"Skipping {source_file.name}: identical file already exists ({base_destination_file.name})")
+                return False
+            else:
+                # Files have different content
+                if self.overwrite:
+                    logger.warning(f"Destination file exists with different content: {source_file.name} - overwriting")
+                    try:
+                        base_destination_file.unlink()
+                    except Exception as e:
+                        logger.error(f"Failed to delete existing file {base_destination_file.name}: {e}")
+                        return False
+                    # Fall through to copy with the base destination name
+                    destination_file = base_destination_file
+                else:
+                    # Different content without --overwrite: use collision handling
+                    destination_file = self.file_namer.get_next_available_filename(base_destination_file)
+        else:
+            # File doesn't exist yet, use the base destination name
+            destination_file = base_destination_file
 
         # Copy file with retry logic (up to 3 attempts)
         max_retries = 3

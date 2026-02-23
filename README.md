@@ -7,7 +7,7 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 - **Standardized Naming**: Renames media files to `YYYYMMDD-HHMMSS-<device_type>.ext` format with device identification
 - **Smart Timestamp Extraction**: Extracts creation timestamps from file metadata with intelligent fallback to file modification time
 - **Collision Handling**: Automatically handles naming conflicts with incrementing suffixes
-- **File Type Support**: MP4, MOV, M4A, WAV, AAC, and image files (JPG, PNG, RAW formats)
+- **File Type Support**: MP4, MOV, M4A, WAV, AAC, and image files (JPG, JPEG, PNG, and RAW formats: DNG, CR2, NEF, ARW, GPR)
 - **Safe Operations**: Copies files (preserves originals) rather than moving them
 - **Smart Skipping**: Skips files that already exist in the destination with informative messaging
 - **Optional Raw Image Skipping**: Use `--skip-raw` flag to exclude raw image files if needed
@@ -28,7 +28,7 @@ No external tools needed! The archiver uses pure Python libraries for metadata e
 ## Usage
 
 ```bash
-python main.py --source <source_directory> --destination <destination_directory> [--skip-raw]
+python main.py --source <source_directory> --destination <destination_directory> [--skip-raw] [--overwrite]
 ```
 
 ### Examples
@@ -49,6 +49,12 @@ Archive just image files:
 
 ```bash
 python main.py --source ~/Pictures/temp --destination ~/Pictures/Archive
+```
+
+Archive and overwrite files with different content:
+
+```bash
+python main.py --source /Volumes/GoPro --destination ~/Videos/Archive --overwrite
 ```
 
 ## How It Works
@@ -108,6 +114,13 @@ If a file with the same name already exists in the same date folder:
 
 ### 6. File Copying
 Files are copied to the destination directory while preserving their metadata.
+
+### 7. Duplicate File Detection
+When a destination file with the same name already exists:
+- The tool calculates SHA256 checksums of both files
+- If checksums match: File is skipped (already archived)
+- If checksums differ: File is skipped with a warning (use `--overwrite` flag to replace it)
+- The `--overwrite` flag allows replacing files with different content (use with caution)
 
 ## Output
 

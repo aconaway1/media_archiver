@@ -84,6 +84,11 @@ Examples:
         action='store_true',
         help='Skip raw image files (.raw, .dng, .cr2, .nef, .arw, .gpr)'
     )
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help='Overwrite destination files if content differs (use with caution)'
+    )
 
     args = parser.parse_args()
 
@@ -93,7 +98,7 @@ Examples:
 
     # Run archiver
     try:
-        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw)
+        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw, overwrite=args.overwrite)
         archiver.run()
     except Exception as e:
         logger.error(f"Unexpected error: {e}")

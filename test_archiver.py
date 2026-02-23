@@ -63,10 +63,11 @@ def test_multiple_files_same_timestamp():
         source.mkdir()
         dest.mkdir()
 
-        # Create multiple test files with same name pattern
+        # Create multiple test files with DIFFERENT content
+        # (so they won't be treated as duplicates)
         for i in range(3):
             f = source / f"video{i}.mp4"
-            f.write_bytes(b"Content " * 1000)
+            f.write_bytes(b"Video content " + str(i).encode() * 1000)
 
         print(f"Created 3 files with similar content (same timestamp)")
 
