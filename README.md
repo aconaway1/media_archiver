@@ -157,21 +157,19 @@ Processing continues even if individual files fail, with detailed error logging.
 
 ## Supported Formats
 
-| Device | Format | Extension |
-|--------|--------|-----------|
-| GoPro | MP4 | .mp4 |
-| GoPro | MOV | .mov |
-| GoPro | Photo | .jpg |
-| DJI Drones | MP4 | .mp4 |
-| DJI Drones | Photo | .jpg |
-| Tascam Recorders | WAV | .wav |
-| Tascam Recorders | M4A | .m4a |
-| General Audio | AAC | .aac |
-| General Images | JPEG | .jpg, .jpeg |
-| General Images | PNG | .png |
-| General Images | RAW | .raw, .dng, .cr2, .nef, .arw, .gpr |
+**Video Files:**
+- MP4 (.mp4) - GoPro, DJI, and general video
+- MOV (.mov) - GoPro and general video
 
-*Note: RAW image formats (.raw, .dng, .cr2, .nef, .arw, .gpr) can be skipped with the `--skip-raw` flag
+**Audio Files:**
+- WAV (.wav) - Tascam recorders and general audio
+- M4A (.m4a) - Tascam recorders and general audio
+- AAC (.aac) - General audio
+
+**Image Files:**
+- JPEG (.jpg, .jpeg) - Photos from any device
+- PNG (.png) - General images
+- RAW Formats (.raw, .dng, .cr2, .nef, .arw, .gpr) - Professional camera RAW files (can be skipped with `--skip-raw` flag)
 
 ## Troubleshooting
 
