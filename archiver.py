@@ -186,17 +186,24 @@ class Archiver:
         # Detect device type
         device_type = self.metadata_extractor.get_device_type(source_file, source_file.suffix)
 
+        # Calculate source checksum once upfront
+        # This is used for both duplicate detection and copy verification
+        # Avoids reading the source file twice
+        hash_start = time.time()
+        source_hash = self._calculate_sha256(source_file)
+        hash_time = time.time() - hash_start
+        logger.debug(f"Source checksum calculation took {hash_time:.2f}s: {source_file.name}")
+
         # Generate base destination filename (without collision handling)
         base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type)
 
         # Check if destination already exists
         if base_destination_file.exists():
-            # Compare checksums
-            hash_start = time.time()
-            source_hash = self._calculate_sha256(source_file)
+            # Compare checksums for duplicate detection
+            verify_start = time.time()
             dest_hash = self._calculate_sha256(base_destination_file)
-            hash_time = time.time() - hash_start
-            logger.debug(f"Checksum calculation took {hash_time:.2f}s: {source_file.name}")
+            verify_time = time.time() - verify_start
+            logger.debug(f"Destination checksum calculation took {verify_time:.2f}s: {source_file.name}")
 
             if source_hash == dest_hash:
                 logger.info(f"Skipping {source_file.name}: identical file already exists ({base_destination_file.name})")
@@ -227,9 +234,9 @@ class Archiver:
                 shutil.copy2(source_file, destination_file)
                 copy_time = time.time() - copy_start
 
-                # Verify copy integrity with checksum
+                # Verify copy integrity by comparing with cached source hash
+                # Only read destination hash, not source again (already calculated above)
                 verify_start = time.time()
-                source_hash = self._calculate_sha256(source_file)
                 dest_hash = self._calculate_sha256(destination_file)
                 verify_time = time.time() - verify_start
                 logger.debug(f"Copy took {copy_time:.2f}s, verification took {verify_time:.2f}s: {source_file.name}")
