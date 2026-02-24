@@ -4,6 +4,7 @@ Test script for Media Archiver - tests retry logic and checksum verification.
 """
 import tempfile
 import logging
+import shutil
 from pathlib import Path
 from archiver import Archiver
 
@@ -221,6 +222,73 @@ def test_macos_metadata_filtering():
 
         print("\n✓ PASSED: macOS metadata files properly filtered out")
 
+def test_srt_file_handling():
+    """Test that SRT files are copied with '-srt' designation and --ignore-srt flag works."""
+    print("\n" + "="*60)
+    print("TEST 6: SRT file handling")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        # Create SRT and video files
+        (source / "DJI_video.mp4").write_bytes(b"video content")
+        (source / "DJI_video.srt").write_bytes(b"1\n00:00:00,000 --> 00:00:05,000\nTelemetry data")
+        (source / "another.srt").write_bytes(b"2\n00:00:05,000 --> 00:00:10,000\nMore telemetry")
+
+        print("Created files: DJI_video.mp4, DJI_video.srt, another.srt")
+
+        # Test 1: Without --ignore-srt flag (SRT files should be copied)
+        print("\n--- Test 1: Without --ignore-srt flag ---")
+        archiver = Archiver(source, dest)
+        archiver.run()
+
+        copied = list(dest.rglob("*"))
+        copied = [f for f in copied if f.is_file()]
+
+        print(f"Copied {len(copied)} file(s)")
+        for f in copied:
+            print(f"  - {f.name}")
+
+        assert len(copied) == 3, f"Expected 3 files (2 SRT + 1 video), got {len(copied)}"
+
+        srt_files = [f for f in copied if f.suffix == '.srt']
+        assert len(srt_files) == 2, f"Expected 2 SRT files, got {len(srt_files)}"
+
+        # Verify SRT files have '-srt' designation
+        for srt in srt_files:
+            assert '-srt' in srt.name and srt.suffix == '.srt', f"SRT file should have '-srt' designation: {srt.name}"
+
+        print("✓ SRT files copied with '-srt' designation")
+
+        # Test 2: With --ignore-srt flag (SRT files should be skipped)
+        print("\n--- Test 2: With --ignore-srt flag ---")
+        # Clean destination
+        for item in dest.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+
+        archiver = Archiver(source, dest, ignore_srt=True)
+        archiver.run()
+
+        copied = list(dest.rglob("*"))
+        copied = [f for f in copied if f.is_file()]
+
+        print(f"Copied {len(copied)} file(s)")
+        for f in copied:
+            print(f"  - {f.name}")
+
+        assert len(copied) == 1, f"Expected 1 file (video only), got {len(copied)}"
+        assert not any(f.suffix == '.srt' for f in copied), "SRT files should not be copied with --ignore-srt"
+
+        print("✓ SRT files properly skipped with --ignore-srt flag")
+        print("\n✓ PASSED: SRT file handling works correctly")
+
 if __name__ == "__main__":
     try:
         test_basic_copy()
@@ -228,6 +296,7 @@ if __name__ == "__main__":
         test_device_type_detection()
         test_raw_image_skipping()
         test_macos_metadata_filtering()
+        test_srt_file_handling()
 
         print("\n" + "="*60)
         print("ALL TESTS PASSED ✓")

@@ -7,10 +7,11 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 - **Standardized Naming**: Renames media files to `YYYYMMDD-HHMMSS-<device_type>.ext` format with device identification
 - **Smart Timestamp Extraction**: Extracts creation timestamps from file metadata with intelligent fallback to file modification time
 - **Collision Handling**: Automatically handles naming conflicts with incrementing suffixes
-- **File Type Support**: Video (MP4, MOV), Audio (M4A, WAV, AAC), and Images (JPG, PNG, RAW formats)
+- **File Type Support**: Video (MP4, MOV), Audio (M4A, WAV, AAC), Images (JPG, PNG, RAW formats), and SRT files
 - **Safe Operations**: Copies files (preserves originals) rather than moving them
 - **Smart Skipping**: Skips files that already exist in the destination with informative messaging
 - **Optional Raw Image Skipping**: Use `--skip-raw` flag to exclude raw image files if needed
+- **Optional SRT Skipping**: Use `--ignore-srt` flag to exclude DJI SRT subtitle/telemetry files if needed
 
 ## Installation
 
@@ -28,7 +29,7 @@ No external tools needed! The archiver uses pure Python libraries for metadata e
 ## Usage
 
 ```bash
-python main.py --source <source_directory> --destination <destination_directory> [--skip-raw] [--overwrite]
+python main.py --source <source_directory> --destination <destination_directory> [--skip-raw] [--overwrite] [--ignore-srt]
 ```
 
 ### Examples
@@ -57,10 +58,16 @@ Archive and overwrite files with different content:
 python main.py --source /Volumes/GoPro --destination ~/Videos/Archive --overwrite
 ```
 
+Archive DJI files without SRT telemetry files:
+
+```bash
+python main.py --source /Volumes/DJI_001/DCIM --destination ~/Videos/DJI --ignore-srt
+```
+
 ## How It Works
 
 ### 1. File Discovery
-The tool scans the source directory for supported media files (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, .cr2, .nef, .arw, .gpr).
+The tool scans the source directory for supported media files (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, .cr2, .nef, .arw, .gpr, .srt).
 
 ### 2. Timestamp Extraction
 For each file, the tool attempts to extract the creation timestamp in this order:
@@ -73,10 +80,10 @@ For each file, the tool attempts to extract the creation timestamp in this order
 The tool identifies the source device using multiple strategies:
 - **Filename patterns**: Detects GoPro files (GOPR*, GP*) and DJI files (DJI*)
 - **Metadata tags**: Searches video metadata for manufacturer info (DJI, GoPro, HERO)
-- **File type**: Audio-only files (M4A, WAV, AAC) default to 'audio'; image files default to 'image'
+- **File type**: Audio-only files (M4A, WAV, AAC) default to 'audio'; image files default to 'image'; SRT files default to 'srt'
 - **Default**: Unidentified video files default to 'video'
 
-Device types include: `video`, `drone`, `audio`, `image`, or `unknown`
+Device types include: `video`, `drone`, `audio`, `image`, `srt`, or `unknown`
 
 ### 3. Directory Organization
 Files are organized by date in the destination directory:

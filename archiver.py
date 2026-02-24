@@ -89,13 +89,14 @@ class FileNamer:
 class Archiver:
     """Main archiver that orchestrates file discovery, renaming, and copying."""
 
-    SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
+    SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr', '.srt'}
 
-    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False):
+    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False, ignore_srt: bool = False):
         self.source_dir = Path(source_dir)
         self.destination_dir = Path(destination_dir)
         self.skip_raw = skip_raw
         self.overwrite = overwrite
+        self.ignore_srt = ignore_srt
         self.file_namer = FileNamer(self.destination_dir)
         self.metadata_extractor = MetadataExtractor()
 
@@ -150,6 +151,10 @@ class Archiver:
                     # Skip raw files if requested
                     if self.skip_raw and file_path.suffix.lower() in raw_extensions:
                         logger.debug(f"Skipping raw file (--skip-raw enabled): {file_path.name}")
+                        continue
+                    # Skip SRT files if requested
+                    if self.ignore_srt and file_path.suffix.lower() == '.srt':
+                        logger.debug(f"Skipping SRT file (--ignore-srt enabled): {file_path.name}")
                         continue
                     media_files.append(file_path)
         except PermissionError:

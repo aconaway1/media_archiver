@@ -44,6 +44,7 @@ class MetadataExtractor:
     VIDEO_EXTENSIONS = {'.mp4', '.mov'}
     IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
     RAW_IMAGE_EXTENSIONS = {'.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
+    SRT_EXTENSIONS = {'.srt'}
 
     @staticmethod
     def get_datetime(file_path: Path, extension: str) -> Optional[datetime]:
@@ -87,7 +88,7 @@ class MetadataExtractor:
         """
         Detect device type from filename and/or metadata.
 
-        Returns one of: 'video', 'drone', 'audio', 'image', or 'unknown'
+        Returns one of: 'video', 'drone', 'audio', 'image', 'srt', or 'unknown'
 
         Args:
             file_path: Path to the media file
@@ -99,7 +100,11 @@ class MetadataExtractor:
         filename = file_path.name.upper()
         ext_lower = extension.lower()
 
-        # Check filename patterns first
+        # Check for SRT files first
+        if ext_lower in MetadataExtractor.SRT_EXTENSIONS:
+            return 'srt'
+
+        # Check filename patterns
         if filename.startswith('GOPR') or filename.startswith('GP'):
             return 'video'
 
