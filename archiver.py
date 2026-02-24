@@ -104,7 +104,10 @@ class Archiver:
         """Run the archiving process."""
         logger.info(f"Starting archiver: {self.source_dir} -> {self.destination_dir}")
 
+        start_time = time.time()
         media_files = self._discover_media_files()
+        discover_time = time.time() - start_time
+        logger.debug(f"File discovery took {discover_time:.2f}s")
 
         if not media_files:
             logger.info("No media files found in source directory")
@@ -115,8 +118,9 @@ class Archiver:
         processed = 0
         skipped = 0
 
-        for source_file in sorted(media_files):
+        for idx, source_file in enumerate(sorted(media_files), 1):
             try:
+                logger.debug(f"[{idx}/{len(media_files)}] Processing: {source_file.name}")
                 if self._process_file(source_file):
                     processed += 1
                 else:
@@ -170,7 +174,10 @@ class Archiver:
             True if file was copied, False if skipped
         """
         # Extract datetime from file
+        meta_start = time.time()
         dt = self.metadata_extractor.get_datetime(source_file, source_file.suffix)
+        meta_time = time.time() - meta_start
+        logger.debug(f"Metadata extraction took {meta_time:.2f}s: {source_file.name}")
 
         if dt is None:
             logger.error(f"Could not extract timestamp from {source_file.name}, skipping")
@@ -185,8 +192,11 @@ class Archiver:
         # Check if destination already exists
         if base_destination_file.exists():
             # Compare checksums
+            hash_start = time.time()
             source_hash = self._calculate_sha256(source_file)
             dest_hash = self._calculate_sha256(base_destination_file)
+            hash_time = time.time() - hash_start
+            logger.debug(f"Checksum calculation took {hash_time:.2f}s: {source_file.name}")
 
             if source_hash == dest_hash:
                 logger.info(f"Skipping {source_file.name}: identical file already exists ({base_destination_file.name})")
@@ -213,11 +223,16 @@ class Archiver:
         max_retries = 3
         for attempt in range(1, max_retries + 1):
             try:
+                copy_start = time.time()
                 shutil.copy2(source_file, destination_file)
+                copy_time = time.time() - copy_start
 
                 # Verify copy integrity with checksum
+                verify_start = time.time()
                 source_hash = self._calculate_sha256(source_file)
                 dest_hash = self._calculate_sha256(destination_file)
+                verify_time = time.time() - verify_start
+                logger.debug(f"Copy took {copy_time:.2f}s, verification took {verify_time:.2f}s: {source_file.name}")
 
                 if source_hash != dest_hash:
                     logger.warning(f"Checksum mismatch for {source_file.name} (attempt {attempt}/{max_retries}): retrying...")
