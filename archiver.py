@@ -143,6 +143,10 @@ class Archiver:
         try:
             for file_path in self.source_dir.iterdir():
                 if file_path.is_file() and file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
+                    # Skip macOS metadata files (e.g., ._filename)
+                    if file_path.name.startswith('._'):
+                        logger.debug(f"Skipping macOS metadata file: {file_path.name}")
+                        continue
                     # Skip raw files if requested
                     if self.skip_raw and file_path.suffix.lower() in raw_extensions:
                         logger.debug(f"Skipping raw file (--skip-raw enabled): {file_path.name}")

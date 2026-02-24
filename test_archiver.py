@@ -185,12 +185,49 @@ def test_raw_image_skipping():
 
         print("\n✓ PASSED: Raw image skipping works correctly")
 
+def test_macos_metadata_filtering():
+    """Test that macOS metadata files are filtered out."""
+    print("\n" + "="*60)
+    print("TEST 5: macOS metadata file filtering")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        # Create regular media files and macOS metadata files
+        (source / "video.mp4").write_bytes(b"video content")
+        (source / "._video.mp4").write_bytes(b"macos metadata")
+        (source / "photo.jpg").write_bytes(b"photo content")
+        (source / "._photo.jpg").write_bytes(b"macos metadata")
+
+        print("Created files: video.mp4, ._video.mp4, photo.jpg, ._photo.jpg")
+
+        # Run archiver
+        archiver = Archiver(source, dest)
+        archiver.run()
+
+        copied = list(dest.rglob("*"))
+        copied = [f for f in copied if f.is_file()]
+
+        print(f"Copied {len(copied)} file(s)")
+        for f in copied:
+            print(f"  - {f.name}")
+
+        assert len(copied) == 2, f"Expected 2 files (no metadata files), got {len(copied)}"
+        assert not any("._" in f.name for f in copied), "macOS metadata files should not be copied"
+
+        print("\n✓ PASSED: macOS metadata files properly filtered out")
+
 if __name__ == "__main__":
     try:
         test_basic_copy()
         test_multiple_files_same_timestamp()
         test_device_type_detection()
         test_raw_image_skipping()
+        test_macos_metadata_filtering()
 
         print("\n" + "="*60)
         print("ALL TESTS PASSED ✓")

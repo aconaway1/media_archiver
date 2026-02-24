@@ -193,6 +193,28 @@ Check that:
 4. Raw files aren't being skipped due to `--skip-raw` flag
 5. Try with a single test file first to isolate the issue
 
+### Parser warnings (hachoir, OpenCV)
+You may see warnings like:
+- `[warn] Skip parser 'MP4File': Unknown MOV file type`
+- `[<NdsFile>] Error when getting size of 'header': delete it`
+
+These are **not our code deleting anything**. They come from third-party parsing libraries (hachoir and OpenCV) that attempt to extract metadata from video files. The "delete it" message refers to internal cleanup of temporary parse structures, not actual file deletion.
+
+These warnings typically occur when:
+- Parsing DJI or proprietary video formats that differ from standard MP4/MOV specs
+- The file format has unexpected structure or tags
+- The library encounters something it doesn't recognize in the metadata
+
+**This is normal and safe** - the archiver continues to work, and files are archived successfully. When metadata extraction fails, the archiver falls back to using the file's modification time for the archive timestamp.
+
+### DJI files with incorrect timestamps
+Some DJI drone files may not have extractable creation metadata in the format the archiver expects. In these cases, the archiver will use the file's modification time from the SD card, which is typically the time the file was written (usually very close to when it was actually recorded).
+
+To ensure accurate timestamps:
+- If your DJI files were recorded on a drone with correct system time, the modification time should be accurate
+- If timestamps are significantly off, check that your drone's clock was set correctly when recording
+- You can verify file timestamps using: `ls -lh <file>` (macOS/Linux)
+
 ## License
 
 MIT License
