@@ -8,11 +8,6 @@ import logging
 from pathlib import Path
 from archiver import Archiver
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s: %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
@@ -94,8 +89,20 @@ Examples:
         action='store_true',
         help='Skip SRT subtitle/telemetry files'
     )
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Enable debug logging to see timing information and detailed diagnostics'
+    )
 
     args = parser.parse_args()
+
+    # Configure logging based on verbose flag
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(levelname)s: %(message)s'
+    )
 
     # Validate paths
     if not validate_paths(args.source, args.destination):
