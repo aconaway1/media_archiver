@@ -2,7 +2,9 @@
 """
 Test script for Media Archiver - tests retry logic and checksum verification.
 """
+import os
 import tempfile
+import time
 import logging
 import shutil
 from pathlib import Path
@@ -289,6 +291,124 @@ def test_srt_file_handling():
         print("✓ SRT files properly skipped with --ignore-srt flag")
         print("\n✓ PASSED: SRT file handling works correctly")
 
+def test_device_tag():
+    """Test --device-tag flag adds tag to output filenames."""
+    print("\n" + "="*60)
+    print("TEST 7: Device tag (--device-tag flag)")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        (source / "video.mp4").write_bytes(b"video content " * 500)
+
+        # Test with device tag
+        print("\n--- Test 1: With --device-tag gopro-a ---")
+        archiver = Archiver(source, dest, device_tag="gopro-a")
+        archiver.run()
+
+        copied = [f for f in dest.rglob("*") if f.is_file()]
+        assert len(copied) == 1, f"Expected 1 file, got {len(copied)}"
+
+        filename = copied[0].name
+        print(f"  Output filename: {filename}")
+        assert "-gopro-a." in filename, f"Expected '-gopro-a.' in filename, got '{filename}'"
+        print("  ✓ Device tag present in filename")
+
+        # Test without device tag (default behavior unchanged)
+        print("\n--- Test 2: Without --device-tag (default) ---")
+        dest2 = Path(tmpdir) / "dest2"
+        dest2.mkdir()
+
+        archiver2 = Archiver(source, dest2)
+        archiver2.run()
+
+        copied2 = [f for f in dest2.rglob("*") if f.is_file()]
+        assert len(copied2) == 1, f"Expected 1 file, got {len(copied2)}"
+
+        filename2 = copied2[0].name
+        print(f"  Output filename: {filename2}")
+        # Should end with -<device_type>.ext, no extra tag
+        parts = filename2.rsplit('.', 1)[0].split('-')
+        assert len(parts) == 3, f"Expected 3 parts (date-time-type), got {len(parts)}: {parts}"
+        print("  ✓ No extra tag in default filename")
+
+        print("\n✓ PASSED: Device tag works correctly")
+
+def test_recent_filter():
+    """Test --recent flag filters out old files using calendar-day cutoff."""
+    print("\n" + "="*60)
+    print("TEST 8: Recent file filter (--recent flag)")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        # Create a recent file (mtime = now, default)
+        recent_file = source / "new_video.mp4"
+        recent_file.write_bytes(b"recent video " * 500)
+
+        # Create an old file and backdate its mtime to 10 days ago
+        old_file = source / "old_video.mp4"
+        old_file.write_bytes(b"old video " * 500)
+        old_mtime = time.time() - (10 * 86400)
+        os.utime(old_file, (old_mtime, old_mtime))
+
+        print("Created files: new_video.mp4 (today), old_video.mp4 (10 days ago)")
+
+        # Test 1: --recent 1 (default) should only copy today's file
+        print("\n--- Test 1: With --recent 1 (today only) ---")
+        archiver = Archiver(source, dest, recent_days=1)
+        archiver.run()
+
+        copied = [f for f in dest.rglob("*") if f.is_file()]
+        print(f"  Copied {len(copied)} file(s)")
+        for f in copied:
+            print(f"    - {f.name}")
+
+        assert len(copied) == 1, f"Expected 1 file, got {len(copied)}"
+        print("  ✓ Only today's file was copied")
+
+        # Test 2: --recent 0 should copy all files (no filtering)
+        print("\n--- Test 2: With --recent 0 (all files) ---")
+        dest2 = Path(tmpdir) / "dest2"
+        dest2.mkdir()
+
+        archiver2 = Archiver(source, dest2, recent_days=0)
+        archiver2.run()
+
+        copied2 = [f for f in dest2.rglob("*") if f.is_file()]
+        print(f"  Copied {len(copied2)} file(s)")
+        for f in copied2:
+            print(f"    - {f.name}")
+
+        assert len(copied2) == 2, f"Expected 2 files, got {len(copied2)}"
+        print("  ✓ All files copied with --recent 0")
+
+        # Test 3: --recent 11 should include the 10-day-old file
+        print("\n--- Test 3: With --recent 11 (last 11 days) ---")
+        dest3 = Path(tmpdir) / "dest3"
+        dest3.mkdir()
+
+        archiver3 = Archiver(source, dest3, recent_days=11)
+        archiver3.run()
+
+        copied3 = [f for f in dest3.rglob("*") if f.is_file()]
+        print(f"  Copied {len(copied3)} file(s)")
+        for f in copied3:
+            print(f"    - {f.name}")
+
+        assert len(copied3) == 2, f"Expected 2 files, got {len(copied3)}"
+        print("  ✓ Both files copied with --recent 11")
+
+        print("\n✓ PASSED: Recent file filter works correctly")
+
 if __name__ == "__main__":
     try:
         test_basic_copy()
@@ -297,6 +417,8 @@ if __name__ == "__main__":
         test_raw_image_skipping()
         test_macos_metadata_filtering()
         test_srt_file_handling()
+        test_device_tag()
+        test_recent_filter()
 
         print("\n" + "="*60)
         print("ALL TESTS PASSED ✓")

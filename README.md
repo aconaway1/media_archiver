@@ -1,5 +1,7 @@
 # Media Archiver
 
+> Built with [Claude Code](https://claude.ai/claude-code)
+
 A Python CLI tool for archiving and standardizing the naming of media files from various devices (GoPro, DJI drones, Tascam recorders, etc.).
 
 ## Features
@@ -10,6 +12,8 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 - **File Type Support**: Video (MP4, MOV), Audio (M4A, WAV, AAC), Images (JPG, PNG, RAW formats), and SRT files
 - **Safe Operations**: Copies files (preserves originals) rather than moving them
 - **Smart Skipping**: Skips files that already exist in the destination with informative messaging
+- **Device Tagging**: Use `--device-tag` to identify source devices (e.g., `gopro-a`, `drone-mavic3`) in filenames
+- **Recent File Filtering**: By default, only archives files from today. Use `--recent N` to include the last N days, or `--recent 0` for all files
 - **Optional Raw Image Skipping**: Use `--skip-raw` flag to exclude raw image files if needed
 - **Optional SRT Skipping**: Use `--ignore-srt` flag to exclude DJI SRT subtitle/telemetry files if needed
 
@@ -29,39 +33,52 @@ No external tools needed! The archiver uses pure Python libraries for metadata e
 ## Usage
 
 ```bash
-python main.py --source <source_directory> --destination <destination_directory> [--skip-raw] [--overwrite] [--ignore-srt]
+python main.py --source <source_directory> --destination <destination_directory> [options]
 ```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--source` | Source directory containing media files (required) |
+| `--destination` | Destination directory for archived files (required) |
+| `--recent N` | Only archive files from the last N days (default: 1, today only). Use `--recent 0` for all files |
+| `--device-tag TAG` | Freeform tag appended to filenames to identify the source device |
+| `--skip-raw` | Skip raw image files (.raw, .dng, .cr2, .nef, .arw, .gpr) |
+| `--overwrite` | Overwrite destination files if content differs (use with caution) |
+| `--ignore-srt` | Skip DJI SRT subtitle/telemetry files |
+| `--verbose` | Enable debug logging with timing diagnostics |
 
 ### Examples
 
-Archive files from an SD card:
+Archive today's files from an SD card (default behavior):
 
 ```bash
 python main.py --source /Volumes/GoPro --destination ~/Videos/Archive
+```
+
+Archive the last 3 days of footage with a device tag:
+
+```bash
+python main.py --source /Volumes/GoPro --destination ~/Videos/Archive --recent 3 --device-tag gopro-a
+```
+
+Archive all files (override the default recent filter):
+
+```bash
+python main.py --source /Volumes/GoPro --destination ~/Videos/Archive --recent 0
+```
+
+Archive DJI files without SRT telemetry, tagged by drone:
+
+```bash
+python main.py --source /Volumes/DJI_001/DCIM --destination ~/Videos/DJI --ignore-srt --device-tag mavic3
 ```
 
 Archive files and skip raw images:
 
 ```bash
 python main.py --source ./raw_media --destination ./archived_media --skip-raw
-```
-
-Archive just image files:
-
-```bash
-python main.py --source ~/Pictures/temp --destination ~/Pictures/Archive
-```
-
-Archive and overwrite files with different content:
-
-```bash
-python main.py --source /Volumes/GoPro --destination ~/Videos/Archive --overwrite
-```
-
-Archive DJI files without SRT telemetry files:
-
-```bash
-python main.py --source /Volumes/DJI_001/DCIM --destination ~/Videos/DJI --ignore-srt
 ```
 
 ## How It Works
@@ -92,8 +109,8 @@ Files are organized by date in the destination directory:
 ├── 2024/
 │   ├── 02/
 │   │   ├── 15/
-│   │   │   ├── 20240215-143045-video.mp4
-│   │   │   ├── 20240215-143045-drone.mov
+│   │   │   ├── 20240215-143045-video-gopro-a.mp4
+│   │   │   ├── 20240215-143045-drone-mavic3.mov
 │   │   │   ├── 20240215-143215-image.jpg
 │   │   │   └── 20240215-143245-image.png
 │   │   └── 16/
@@ -101,15 +118,17 @@ Files are organized by date in the destination directory:
 ```
 
 ### 4. Filename Generation
-Filenames are formatted as `YYYYMMDD-HHMMSS-<device_type>.<extension>`:
+Filenames are formatted as `YYYYMMDD-HHMMSS-<device_type>[-<device_tag>].<extension>`:
 - `YYYYMMDD`: Date (e.g., 20240215)
 - `HHMMSS`: Time (e.g., 143045)
 - `<device_type>`: Device type (e.g., video, drone, audio, image)
+- `<device_tag>`: Optional device identifier from `--device-tag`
 - Extension: Original file extension (e.g., .mp4)
 
 Example outputs:
-- `20240215-143045-video.mp4` (GoPro video)
-- `20240215-143045-drone.mov` (DJI drone footage)
+- `20240215-143045-video.mp4` (GoPro video, no tag)
+- `20240215-143045-video-gopro-a.mp4` (GoPro video with `--device-tag gopro-a`)
+- `20240215-143045-drone-mavic3.mov` (DJI drone with `--device-tag mavic3`)
 - `20240215-143215-image.jpg` (Photo from camera or drone)
 - `20240216-091530-audio.wav` (Tascam audio recording)
 
@@ -135,11 +154,12 @@ The tool provides informative logging:
 
 ```
 INFO: Starting archiver: /source -> /destination
-INFO: Found 42 media file(s) to process
-INFO: Copied: GOPR1234.MP4 -> 20240222-143025-video.mp4
-INFO: Copied: DJI_0001.MOV -> 20240222-143126-drone.mov
+INFO: Skipped 128 file(s) older than 1 day(s)
+INFO: Found 5 media file(s) to process
+INFO: Copied: GOPR1234.MP4 -> 20240222-143025-video-gopro-a.mp4
+INFO: Copied: DJI_0001.MOV -> 20240222-143126-drone-mavic3.mov
 INFO: Copied: audio.wav -> 20240222-143200-audio.wav
-INFO: Processing complete: 42 copied, 0 skipped/failed
+INFO: Processing complete: 5 copied, 0 skipped/failed
 ```
 
 ## Requirements
@@ -194,11 +214,12 @@ Ensure you have read permissions on the source directory and write permissions o
 
 ### Files not being copied
 Check that:
-1. Files have supported extensions (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, etc.)
-2. Destination directory exists and is writable
-3. Source directory contains readable files
-4. Raw files aren't being skipped due to `--skip-raw` flag
-5. Try with a single test file first to isolate the issue
+1. Files may be older than 1 day — try `--recent 0` to include all files
+2. Files have supported extensions (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, etc.)
+3. Destination directory exists and is writable
+4. Source directory contains readable files
+5. Raw files aren't being skipped due to `--skip-raw` flag
+6. Try with a single test file first to isolate the issue
 
 ### Parser warnings (hachoir, OpenCV)
 You may see warnings like:
@@ -228,6 +249,4 @@ MIT License
 
 ## Development
 
-This project was developed with assistance from [Claude AI](https://claude.ai). The architecture design, implementation, testing, and documentation were guided by Claude to ensure best practices, comprehensive test coverage, and production-ready code quality.
-
-All commits include co-author attribution: `Co-Authored-By: Claude <noreply@anthropic.com>`
+This project is developed with [Claude Code](https://claude.ai/claude-code), Anthropic's CLI tool for AI-assisted software development.

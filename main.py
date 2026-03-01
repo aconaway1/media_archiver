@@ -90,6 +90,21 @@ Examples:
         help='Skip SRT subtitle/telemetry files'
     )
     parser.add_argument(
+        '--device-tag',
+        type=str,
+        default=None,
+        help='Freeform tag appended to filenames to identify the source device (e.g., gopro-a, drone-mavic3)'
+    )
+    parser.add_argument(
+        '--recent',
+        type=int,
+        nargs='?',
+        const=1,
+        default=1,
+        metavar='N',
+        help='Only archive files modified within the last N days (default: 1). Use --recent 0 to process all files.'
+    )
+    parser.add_argument(
         '--verbose',
         action='store_true',
         help='Enable debug logging to see timing information and detailed diagnostics'
@@ -110,7 +125,7 @@ Examples:
 
     # Run archiver
     try:
-        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw, overwrite=args.overwrite, ignore_srt=args.ignore_srt)
+        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw, overwrite=args.overwrite, ignore_srt=args.ignore_srt, device_tag=args.device_tag, recent_days=args.recent)
         archiver.run()
     except Exception as e:
         logger.error(f"Unexpected error: {e}")

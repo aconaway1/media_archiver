@@ -7,7 +7,7 @@ import shutil
 import time
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from metadata import MetadataExtractor
 
 logger = logging.getLogger(__name__)
@@ -19,16 +19,17 @@ class FileNamer:
     def __init__(self, destination_dir: Path):
         self.destination_dir = destination_dir
 
-    def get_destination_filename(self, dt: datetime, original_extension: str, device_type: str) -> Path:
+    def get_destination_filename(self, dt: datetime, original_extension: str, device_type: str, device_tag: Optional[str] = None) -> Path:
         """
         Generate a destination filename.
 
-        Format: <DESTINATION>/YYYY/MM/DD/YYYYMMDD-HHMMSS-<device_type>.ext
+        Format: <DESTINATION>/YYYY/MM/DD/YYYYMMDD-HHMMSS-<device_type>[-<device_tag>].ext
 
         Args:
             dt: datetime object
             original_extension: file extension including dot (e.g., '.mp4')
             device_type: device type string (e.g., 'camera', 'drone', 'audio')
+            device_tag: optional freeform tag to identify the source device
 
         Returns:
             Path object for the destination file (base name without collision handling)
@@ -46,8 +47,10 @@ class FileNamer:
             logger.error(f"Failed to create directory {date_dir}: {e}")
             raise
 
-        # Format base filename: YYYYMMDD-HHMMSS-<device_type>
+        # Format base filename: YYYYMMDD-HHMMSS-<device_type>[-<device_tag>]
         base_name = dt.strftime('%Y%m%d-%H%M%S') + f'-{device_type}'
+        if device_tag:
+            base_name += f'-{device_tag}'
         base_filename = base_name + original_extension
 
         return date_dir / base_filename
@@ -91,12 +94,14 @@ class Archiver:
 
     SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr', '.srt'}
 
-    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False, ignore_srt: bool = False):
+    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False, ignore_srt: bool = False, device_tag: Optional[str] = None, recent_days: Optional[int] = None):
         self.source_dir = Path(source_dir)
         self.destination_dir = Path(destination_dir)
         self.skip_raw = skip_raw
         self.overwrite = overwrite
         self.ignore_srt = ignore_srt
+        self.device_tag = device_tag
+        self.recent_days = recent_days
         self.file_namer = FileNamer(self.destination_dir)
         self.metadata_extractor = MetadataExtractor()
 
@@ -144,6 +149,17 @@ class Archiver:
         """Discover all supported media files in source directory."""
         media_files = []
         raw_extensions = {'.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr'}
+        skipped_old = 0
+
+        # Compute age cutoff if --recent was specified (0 means all files)
+        if self.recent_days is not None and self.recent_days > 0:
+            # Use calendar-day cutoff: midnight N-1 days ago
+            # --recent 1 = since midnight today, --recent 2 = since midnight yesterday
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff_dt = today - timedelta(days=self.recent_days - 1)
+            cutoff_time = cutoff_dt.timestamp()
+        else:
+            cutoff_time = None
 
         try:
             for file_path in self.source_dir.iterdir():
@@ -160,9 +176,21 @@ class Archiver:
                     if self.ignore_srt and file_path.suffix.lower() == '.srt':
                         logger.debug(f"Skipping SRT file (--ignore-srt enabled): {file_path.name}")
                         continue
+                    # Skip files older than --recent N days
+                    if cutoff_time is not None:
+                        try:
+                            if file_path.stat().st_mtime < cutoff_time:
+                                logger.debug(f"Skipping old file (--recent {self.recent_days}): {file_path.name}")
+                                skipped_old += 1
+                                continue
+                        except OSError:
+                            pass
                     media_files.append(file_path)
         except PermissionError:
             logger.error(f"Permission denied reading source directory: {self.source_dir}")
+
+        if skipped_old > 0:
+            logger.info(f"Skipped {skipped_old} file(s) older than {self.recent_days} day(s)")
 
         return media_files
 
@@ -195,7 +223,7 @@ class Archiver:
         logger.debug(f"Source checksum calculation took {hash_time:.2f}s: {source_file.name}")
 
         # Generate base destination filename (without collision handling)
-        base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type)
+        base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type, self.device_tag)
 
         # Check if destination already exists
         if base_destination_file.exists():
