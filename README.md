@@ -12,6 +12,8 @@ A Python CLI tool for archiving and standardizing the naming of media files from
 - **File Type Support**: Video (MP4, MOV), Audio (M4A, WAV, AAC), Images (JPG, PNG, RAW formats), and SRT files
 - **Safe Operations**: Copies files (preserves originals) rather than moving them
 - **Smart Skipping**: Skips files that already exist in the destination with informative messaging
+- **YAML Config File**: Set persistent defaults for destination, flags, and device tags in `config.yml`
+- **Smart Source Scanning**: Point at a volume/SD card root and the tool auto-detects media directories (DCIM/100GOPRO, DCIM/DJI_001, MUSIC/, etc.)
 - **Device Tagging**: Use `--device-tag` to identify source devices (e.g., `gopro-a`, `drone-mavic3`) in filenames
 - **Recent File Filtering**: By default, only archives files from today. Use `--recent N` to include the last N days, or `--recent 0` for all files
 - **Optional Raw Image Skipping**: Use `--skip-raw` flag to exclude raw image files if needed
@@ -30,18 +32,58 @@ pip install -r requirements.txt
 
 No external tools needed! The archiver uses pure Python libraries for metadata extraction.
 
+## Configuration
+
+You can set persistent defaults in a `config.yml` file in the project directory. Copy the example to get started:
+
+```bash
+cp config.yml.example config.yml
+```
+
+Edit `config.yml` with your preferred defaults:
+
+```yaml
+# Source and destination directories
+source: /Volumes/Untitled
+destination: ~/Library/CloudStorage/Dropbox/Video
+
+# File filtering
+skip_raw: false
+ignore_srt: false
+
+# Device identification tag (appended to filenames)
+device_tag: mavic3
+
+# Only archive files from the last N days (0 = all files)
+recent: 1
+
+# Overwrite destination files with different content
+overwrite: false
+
+# Enable debug logging
+verbose: false
+```
+
+CLI flags always override config file values. The config file is gitignored so your local paths stay private.
+
 ## Usage
 
 ```bash
 python main.py --source <source_directory> --destination <destination_directory> [options]
 ```
 
+If `--source` and `--destination` are set in `config.yml`, you can run with no arguments:
+
+```bash
+python main.py
+```
+
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `--source` | Source directory containing media files (required) |
-| `--destination` | Destination directory for archived files (required) |
+| `--source` | Source directory containing media files (required, via CLI or config) |
+| `--destination` | Destination directory for archived files (required, via CLI or config) |
 | `--recent N` | Only archive files from the last N days (default: 1, today only). Use `--recent 0` for all files |
 | `--device-tag TAG` | Freeform tag appended to filenames to identify the source device |
 | `--skip-raw` | Skip raw image files (.raw, .dng, .cr2, .nef, .arw, .gpr) |
@@ -75,6 +117,31 @@ Archive DJI files without SRT telemetry, tagged by drone:
 python main.py --source /Volumes/DJI_001/DCIM --destination ~/Videos/DJI --ignore-srt --device-tag mavic3
 ```
 
+Point at an SD card root and let the tool find media directories:
+
+```bash
+python main.py --source /Volumes/Untitled --destination ~/Videos/Archive
+```
+
+The tool will scan for known structures and ask for confirmation:
+
+```
+Detected media sources:
+--------------------------------------------------
+  [gopro] /Volumes/Untitled/DCIM/100GOPRO (42 files)
+  [gopro] /Volumes/Untitled/DCIM/101GOPRO (18 files)
+
+Total: 2 source directories
+
+Process these sources? [y/N]
+```
+
+With config.yml set up, archive with zero arguments:
+
+```bash
+python main.py
+```
+
 Archive files and skip raw images:
 
 ```bash
@@ -83,17 +150,24 @@ python main.py --source ./raw_media --destination ./archived_media --skip-raw
 
 ## How It Works
 
-### 1. File Discovery
-The tool scans the source directory for supported media files (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, .cr2, .nef, .arw, .gpr, .srt).
+### 1. Source Scanning
+When given a source path, the tool first checks if media files exist directly in that directory (backward compatible). If not, it scans for known device directory structures:
+- **DCIM/** subdirectories: 100GOPRO, 101GOPRO, DJI_001, 100MEDIA, etc.
+- **Audio folders**: MUSIC/, SOUND/, RECORD/ (Tascam-style recorders)
 
-### 2. Timestamp Extraction
+Each detected subdirectory is treated as a separate source. If multiple sources are found, you'll be prompted to confirm before processing.
+
+### 2. File Discovery
+The tool scans each source directory for supported media files (.mp4, .mov, .m4a, .wav, .aac, .jpg, .jpeg, .png, .raw, .dng, .cr2, .nef, .arw, .gpr, .srt).
+
+### 3. Timestamp Extraction
 For each file, the tool attempts to extract the creation timestamp in this order:
 - **Video files (.mp4, .mov)**: Reads metadata using hachoir (pure Python) or OpenCV
 - **Audio files (.m4a, .wav, .aac)**: Reads date/year tags using mutagen library
 - **Image files (.jpg, .jpeg, .png, RAW)**: Reads EXIF DateTime, DateTimeOriginal, or DateTimeDigitized tags
 - **Fallback**: Uses the file's modification timestamp
 
-### 2b. Device Type Detection
+### 3b. Device Type Detection
 The tool identifies the source device using multiple strategies:
 - **Filename patterns**: Detects GoPro files (GOPR*, GP*) and DJI files (DJI*)
 - **Metadata tags**: Searches video metadata for manufacturer info (DJI, GoPro, HERO)
@@ -102,7 +176,7 @@ The tool identifies the source device using multiple strategies:
 
 Device types include: `video`, `drone`, `audio`, `image`, `srt`, or `unknown`
 
-### 3. Directory Organization
+### 4. Directory Organization
 Files are organized by date in the destination directory:
 ```
 <DESTINATION>/
@@ -117,7 +191,7 @@ Files are organized by date in the destination directory:
 │   │       └── 20240216-091530-audio.wav
 ```
 
-### 4. Filename Generation
+### 5. Filename Generation
 Filenames are formatted as `YYYYMMDD-HHMMSS-<device_type>[-<device_tag>].<extension>`:
 - `YYYYMMDD`: Date (e.g., 20240215)
 - `HHMMSS`: Time (e.g., 143045)
@@ -132,16 +206,16 @@ Example outputs:
 - `20240215-143215-image.jpg` (Photo from camera or drone)
 - `20240216-091530-audio.wav` (Tascam audio recording)
 
-### 5. Collision Handling
+### 6. Collision Handling
 If a file with the same name already exists in the same date folder:
 - First collision: Changes to `YYYYMMDD-HHMMSS-<device_type>.1.ext`
 - Second collision: Changes to `YYYYMMDD-HHMMSS-<device_type>.2.ext`
 - And so on...
 
-### 6. File Copying
+### 7. File Copying
 Files are copied to the destination directory while preserving their metadata.
 
-### 7. Duplicate File Detection
+### 8. Duplicate File Detection
 When a destination file with the same name already exists:
 - The tool calculates SHA256 checksums of both files
 - If checksums match: File is skipped (already archived)
@@ -169,6 +243,7 @@ INFO: Processing complete: 5 copied, 0 skipped/failed
 - hachoir library for video metadata parsing (pure Python)
 - opencv-python for video format validation
 - Pillow library for image EXIF metadata reading
+- pyyaml for config file support
 - Read and write permissions to source and destination directories
 
 ## Error Handling

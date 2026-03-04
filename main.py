@@ -11,6 +11,21 @@ from archiver import Archiver
 logger = logging.getLogger(__name__)
 
 
+def load_config() -> dict:
+    """Load configuration from config.yml if it exists."""
+    config_path = Path(__file__).parent / 'config.yml'
+    if not config_path.exists():
+        return {}
+    try:
+        import yaml
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config if isinstance(config, dict) else {}
+    except Exception as e:
+        logger.warning(f"Failed to load config.yml: {e}")
+        return {}
+
+
 def validate_paths(source: Path, destination: Path) -> bool:
     """Validate that source exists and destination is writable."""
     if not source.exists():
@@ -51,7 +66,46 @@ def validate_paths(source: Path, destination: Path) -> bool:
     return True
 
 
+def run_archiver(source: Path, destination: Path, args) -> None:
+    """Run the archiver for a single source directory."""
+    try:
+        archiver = Archiver(
+            source, destination,
+            skip_raw=args.skip_raw,
+            overwrite=args.overwrite,
+            ignore_srt=args.ignore_srt,
+            device_tag=args.device_tag,
+            recent_days=args.recent,
+        )
+        archiver.run()
+    except Exception as e:
+        logger.error(f"Error processing {source}: {e}")
+
+
+def prompt_for_confirmation(detected_sources) -> bool:
+    """Display detected media sources and ask user to confirm processing."""
+    from source_scanner import MEDIA_EXTENSIONS
+
+    print("\nDetected media sources:")
+    print("-" * 50)
+
+    for src in detected_sources:
+        print(f"  [{src.device_hint}] {src.source_dir} ({src.file_count} files)")
+
+    print(f"\nTotal: {len(detected_sources)} source directories")
+    print()
+
+    try:
+        response = input("Process these sources? [y/N] ").strip().lower()
+        return response in ('y', 'yes')
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+
+
 def main():
+    config = load_config()
+
     parser = argparse.ArgumentParser(
         description='Archive and rename media files to standardized format (YYYYMMDD-HHMMSS.sss)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -65,13 +119,13 @@ Examples:
     parser.add_argument(
         '--source',
         type=Path,
-        required=True,
+        default=None,
         help='Source directory containing media files to archive'
     )
     parser.add_argument(
         '--destination',
         type=Path,
-        required=True,
+        default=None,
         help='Destination directory where renamed files will be copied'
     )
     parser.add_argument(
@@ -110,6 +164,17 @@ Examples:
         help='Enable debug logging to see timing information and detailed diagnostics'
     )
 
+    # Apply config values as argparse defaults (CLI always overrides)
+    config_defaults = {}
+    for config_key in ('source', 'destination', 'skip_raw', 'overwrite',
+                        'ignore_srt', 'device_tag', 'recent', 'verbose'):
+        if config_key in config:
+            value = config[config_key]
+            if config_key in ('source', 'destination') and isinstance(value, str):
+                value = Path(value).expanduser()
+            config_defaults[config_key] = value
+    parser.set_defaults(**config_defaults)
+
     args = parser.parse_args()
 
     # Configure logging based on verbose flag
@@ -119,17 +184,49 @@ Examples:
         format='%(levelname)s: %(message)s'
     )
 
-    # Validate paths
-    if not validate_paths(args.source, args.destination):
+    # Validate required arguments
+    if args.source is None:
+        parser.error("--source is required (via CLI or config.yml)")
+    if args.destination is None:
+        parser.error("--destination is required (via CLI or config.yml)")
+
+    source = Path(args.source).expanduser()
+    destination = Path(args.destination).expanduser()
+
+    if not source.exists():
+        logger.error(f"Source directory does not exist: {source}")
         sys.exit(1)
 
-    # Run archiver
-    try:
-        archiver = Archiver(args.source, args.destination, skip_raw=args.skip_raw, overwrite=args.overwrite, ignore_srt=args.ignore_srt, device_tag=args.device_tag, recent_days=args.recent)
-        archiver.run()
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+    # Scan source for media directories
+    from source_scanner import SourceScanner
+    scanner = SourceScanner()
+    detected = scanner.scan(source)
+
+    if not detected:
+        logger.error(f"No media files found in {source} or its subdirectories")
         sys.exit(1)
+
+    # Single direct source (media files in source root) - backward compatible, no prompt
+    if len(detected) == 1 and detected[0].source_dir == source:
+        if not validate_paths(source, destination):
+            sys.exit(1)
+        run_archiver(source, destination, args)
+    else:
+        # Multiple subdirectories found - confirm with user
+        if not prompt_for_confirmation(detected):
+            logger.info("Cancelled by user.")
+            sys.exit(0)
+
+        total_success = 0
+        for idx, src in enumerate(detected, 1):
+            logger.info(f"\n--- [{idx}/{len(detected)}] Processing: {src.source_dir} ({src.device_hint}) ---")
+            if not validate_paths(src.source_dir, destination):
+                logger.error(f"Skipping {src.source_dir}: path validation failed")
+                continue
+            run_archiver(src.source_dir, destination, args)
+            total_success += 1
+
+        logger.info(f"\nCompleted: processed {total_success}/{len(detected)} source directories")
 
 
 if __name__ == '__main__':

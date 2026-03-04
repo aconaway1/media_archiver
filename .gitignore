@@ -137,3 +137,6 @@ Thumbs.db
 test_source/
 test_destination/
 samples/
+
+# User config (contains local paths)
+config.yml

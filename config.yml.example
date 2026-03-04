@@ -1,0 +1,23 @@
+# Media Archiver Configuration
+# Copy this file to config.yml and uncomment/edit values as needed.
+# CLI flags will override these values.
+
+# Source and destination directories
+# source: /Volumes/Untitled
+# destination: ~/Library/CloudStorage/Dropbox/Video
+
+# File filtering
+# skip_raw: false
+# ignore_srt: false
+
+# Device identification tag (appended to filenames)
+# device_tag: mavic3
+
+# Only archive files from the last N days (0 = all files)
+# recent: 1
+
+# Overwrite destination files with different content
+# overwrite: false
+
+# Enable debug logging
+# verbose: false
