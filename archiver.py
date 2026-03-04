@@ -145,6 +145,21 @@ class Archiver:
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
 
+    @staticmethod
+    def _copy_and_checksum(source_file: Path, destination_file: Path) -> str:
+        """Copy a file and compute its SHA256 in a single read pass.
+
+        Returns the source file's SHA256 hash.
+        """
+        sha256_hash = hashlib.sha256()
+        with open(source_file, 'rb') as src, open(destination_file, 'wb') as dst:
+            for chunk in iter(lambda: src.read(65536), b''):
+                sha256_hash.update(chunk)
+                dst.write(chunk)
+        # Preserve file metadata (timestamps, permissions) like shutil.copy2
+        shutil.copystat(source_file, destination_file)
+        return sha256_hash.hexdigest()
+
     def _discover_media_files(self) -> list[Path]:
         """Discover all supported media files in source directory."""
         media_files = []
@@ -214,24 +229,18 @@ class Archiver:
         # Detect device type
         device_type = self.metadata_extractor.get_device_type(source_file, source_file.suffix)
 
-        # Calculate source checksum once upfront
-        # This is used for both duplicate detection and copy verification
-        # Avoids reading the source file twice
-        hash_start = time.time()
-        source_hash = self._calculate_sha256(source_file)
-        hash_time = time.time() - hash_start
-        logger.debug(f"Source checksum calculation took {hash_time:.2f}s: {source_file.name}")
-
         # Generate base destination filename (without collision handling)
         base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type, self.device_tag)
 
         # Check if destination already exists
+        source_hash = None
         if base_destination_file.exists():
-            # Compare checksums for duplicate detection
-            verify_start = time.time()
+            # Need source hash upfront for duplicate detection
+            hash_start = time.time()
+            source_hash = self._calculate_sha256(source_file)
             dest_hash = self._calculate_sha256(base_destination_file)
-            verify_time = time.time() - verify_start
-            logger.debug(f"Destination checksum calculation took {verify_time:.2f}s: {source_file.name}")
+            hash_time = time.time() - hash_start
+            logger.debug(f"Duplicate detection checksums took {hash_time:.2f}s: {source_file.name}")
 
             if source_hash == dest_hash:
                 logger.info(f"Skipping {source_file.name}: identical file already exists ({base_destination_file.name})")
@@ -259,11 +268,16 @@ class Archiver:
         for attempt in range(1, max_retries + 1):
             try:
                 copy_start = time.time()
-                shutil.copy2(source_file, destination_file)
+                if source_hash is None:
+                    # Common path: no duplicate detection was needed
+                    # Copy and checksum in a single read pass (reads source once)
+                    source_hash = self._copy_and_checksum(source_file, destination_file)
+                else:
+                    # Source hash already cached from duplicate detection
+                    shutil.copy2(source_file, destination_file)
                 copy_time = time.time() - copy_start
 
-                # Verify copy integrity by comparing with cached source hash
-                # Only read destination hash, not source again (already calculated above)
+                # Verify copy integrity by comparing destination hash with source hash
                 verify_start = time.time()
                 dest_hash = self._calculate_sha256(destination_file)
                 verify_time = time.time() - verify_start
