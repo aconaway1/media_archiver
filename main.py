@@ -22,7 +22,7 @@ def load_config() -> dict:
             config = yaml.safe_load(f)
         return config if isinstance(config, dict) else {}
     except Exception as e:
-        logger.warning(f"Failed to load config.yml: {e}")
+        print(f"WARNING: Failed to parse config.yml: {e}", file=sys.stderr)
         return {}
 
 
@@ -163,11 +163,16 @@ Examples:
         action='store_true',
         help='Enable debug logging to see timing information and detailed diagnostics'
     )
+    parser.add_argument(
+        '-y', '--yes',
+        action='store_true',
+        help='Skip confirmation prompt when multiple source directories are detected'
+    )
 
     # Apply config values as argparse defaults (CLI always overrides)
     config_defaults = {}
     for config_key in ('source', 'destination', 'skip_raw', 'overwrite',
-                        'ignore_srt', 'device_tag', 'recent', 'verbose'):
+                        'ignore_srt', 'device_tag', 'recent', 'verbose', 'yes'):
         if config_key in config:
             value = config[config_key]
             if config_key in ('source', 'destination') and isinstance(value, str):
@@ -212,10 +217,13 @@ Examples:
             sys.exit(1)
         run_archiver(source, destination, args)
     else:
-        # Multiple subdirectories found - confirm with user
-        if not prompt_for_confirmation(detected):
+        # Multiple subdirectories found - confirm with user (unless --yes)
+        if not args.yes and not prompt_for_confirmation(detected):
             logger.info("Cancelled by user.")
             sys.exit(0)
+        elif args.yes:
+            for src in detected:
+                logger.info(f"  [{src.device_hint}] {src.source_dir} ({src.file_count} files)")
 
         total_success = 0
         for idx, src in enumerate(detected, 1):

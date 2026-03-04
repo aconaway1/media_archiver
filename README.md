@@ -89,6 +89,7 @@ python main.py
 | `--skip-raw` | Skip raw image files (.raw, .dng, .cr2, .nef, .arw, .gpr) |
 | `--overwrite` | Overwrite destination files if content differs (use with caution) |
 | `--ignore-srt` | Skip DJI SRT subtitle/telemetry files |
+| `-y`, `--yes` | Skip confirmation prompt when multiple source directories are detected |
 | `--verbose` | Enable debug logging with timing diagnostics |
 
 ### Examples

@@ -21,3 +21,6 @@
 
 # Enable debug logging
 # verbose: false
+
+# Skip confirmation prompt for auto-detected sources
+# yes: false
