@@ -143,11 +143,11 @@ class MetadataExtractor:
                 if parser:
                     metadata = extractMetadata(parser)
                     if metadata:
-                        for key, value in metadata.exportPlaintext():
-                            value_str = str(value).upper()
-                            if 'DJI' in value_str:
+                        for line in metadata.exportPlaintext():
+                            line_upper = line.upper()
+                            if 'DJI' in line_upper:
                                 return 'drone'
-                            if 'GOPRO' in value_str or 'HERO' in value_str:
+                            if 'GOPRO' in line_upper or 'HERO' in line_upper:
                                 return 'video'
             except Exception:
                 pass
@@ -164,18 +164,19 @@ class MetadataExtractor:
                 if parser:
                     metadata = extractMetadata(parser)
                     if metadata:
-                        # Look for creation time in metadata
-                        if hasattr(metadata, 'getItems'):
-                            for key, value in metadata.exportPlaintext():
-                                if 'creation' in key.lower() or 'date' in key.lower():
+                        # exportPlaintext() returns a list of strings like:
+                        # "- Creation date: 2025-12-03 14:47:36"
+                        for line in metadata.exportPlaintext():
+                            line = line.strip().lstrip('- ')
+                            if ':' not in line:
+                                continue
+                            key, _, value = line.partition(': ')
+                            if 'creation' in key.lower() or 'date' in key.lower():
+                                value = value.strip()
+                                for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']:
                                     try:
-                                        # Try to parse common date formats
-                                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']:
-                                            try:
-                                                return datetime.strptime(str(value), fmt)
-                                            except ValueError:
-                                                continue
-                                    except Exception:
+                                        return datetime.strptime(value, fmt)
+                                    except ValueError:
                                         continue
             except Exception as e:
                 logger.debug(f"Hachoir failed to extract metadata from {file_path}: {e}")
