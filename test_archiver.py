@@ -409,6 +409,116 @@ def test_recent_filter():
 
         print("\n✓ PASSED: Recent file filter works correctly")
 
+def test_custom_filename_pattern():
+    """Test custom filename pattern support."""
+    print("\n" + "="*60)
+    print("TEST 9: Custom filename patterns")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        (source / "GOPR0001.mp4").write_bytes(b"video content " * 500)
+
+        # Test 1: Default pattern (backward compatible)
+        print("\n--- Test 1: Default pattern ---")
+        archiver = Archiver(source, dest)
+        archiver.run()
+
+        copied = [f for f in dest.rglob("*") if f.is_file()]
+        assert len(copied) == 1
+        filename = copied[0].name
+        print(f"  Output: {filename}")
+        # Default: YYYYMMDD-HHMMSS-video.mp4
+        assert filename.endswith("-video.mp4"), f"Expected default pattern, got '{filename}'"
+        print("  ✓ Default pattern works")
+
+        # Test 2: Custom filename pattern with {original}
+        print("\n--- Test 2: Custom pattern with {{original}} ---")
+        dest2 = Path(tmpdir) / "dest2"
+        dest2.mkdir()
+
+        archiver2 = Archiver(source, dest2, filename_pattern="{original}-{device_type}")
+        archiver2.run()
+
+        copied2 = [f for f in dest2.rglob("*") if f.is_file()]
+        assert len(copied2) == 1
+        filename2 = copied2[0].name
+        print(f"  Output: {filename2}")
+        assert filename2 == "GOPR0001-video.mp4", f"Expected 'GOPR0001-video.mp4', got '{filename2}'"
+        print("  ✓ Custom filename pattern works")
+
+        # Test 3: Custom pattern with device tag
+        print("\n--- Test 3: Pattern with device tag ---")
+        dest3 = Path(tmpdir) / "dest3"
+        dest3.mkdir()
+
+        archiver3 = Archiver(source, dest3, device_tag="gopro-a",
+                             filename_pattern="{year}{month}{day}-{original}{-device_tag}")
+        archiver3.run()
+
+        copied3 = [f for f in dest3.rglob("*") if f.is_file()]
+        assert len(copied3) == 1
+        filename3 = copied3[0].name
+        print(f"  Output: {filename3}")
+        assert "-GOPR0001-gopro-a.mp4" in filename3, f"Expected device tag in filename, got '{filename3}'"
+        print("  ✓ Device tag in custom pattern works")
+
+        # Test 4: {-device_tag} is empty when no tag set
+        print("\n--- Test 4: {{-device_tag}} empty when no tag ---")
+        dest4 = Path(tmpdir) / "dest4"
+        dest4.mkdir()
+
+        archiver4 = Archiver(source, dest4,
+                             filename_pattern="{year}{month}{day}-{original}{-device_tag}")
+        archiver4.run()
+
+        copied4 = [f for f in dest4.rglob("*") if f.is_file()]
+        assert len(copied4) == 1
+        filename4 = copied4[0].name
+        print(f"  Output: {filename4}")
+        # Should NOT have trailing dash before extension
+        assert filename4.endswith("-GOPR0001.mp4"), f"Expected no trailing tag, got '{filename4}'"
+        print("  ✓ {-device_tag} is empty when no tag set")
+
+        print("\n✓ PASSED: Custom filename patterns work correctly")
+
+def test_custom_directory_pattern():
+    """Test custom directory pattern support."""
+    print("\n" + "="*60)
+    print("TEST 10: Custom directory patterns")
+    print("="*60)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = Path(tmpdir) / "source"
+        dest = Path(tmpdir) / "dest"
+        source.mkdir()
+        dest.mkdir()
+
+        (source / "photo.jpg").write_bytes(b"photo content " * 500)
+
+        # Test: Custom directory pattern
+        archiver = Archiver(source, dest, directory_pattern="{year}-{month}")
+        archiver.run()
+
+        copied = [f for f in dest.rglob("*") if f.is_file()]
+        assert len(copied) == 1
+
+        # Get the relative path from dest
+        rel_path = copied[0].relative_to(dest)
+        dir_part = str(rel_path.parent)
+        print(f"  Directory: {dir_part}")
+        print(f"  Filename: {rel_path.name}")
+
+        # Should be YYYY-MM instead of YYYY/MM/DD
+        import re
+        assert re.match(r'^\d{4}-\d{2}$', dir_part), f"Expected YYYY-MM directory, got '{dir_part}'"
+
+        print("\n✓ PASSED: Custom directory patterns work correctly")
+
 if __name__ == "__main__":
     try:
         test_basic_copy()
@@ -419,6 +529,8 @@ if __name__ == "__main__":
         test_srt_file_handling()
         test_device_tag()
         test_recent_filter()
+        test_custom_filename_pattern()
+        test_custom_directory_pattern()
 
         print("\n" + "="*60)
         print("ALL TESTS PASSED ✓")

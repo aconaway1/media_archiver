@@ -24,3 +24,11 @@
 
 # Skip confirmation prompt for auto-detected sources
 # yes: false
+
+# Output file naming pattern (default shown)
+# Available tokens: {year}, {month}, {day}, {hour}, {minute}, {second},
+#   {device_type}, {device_tag}, {-device_tag}, {original}, {ext}
+# filename_pattern: "{year}{month}{day}-{hour}{minute}{second}-{device_type}{-device_tag}"
+
+# Output directory structure pattern (default shown)
+# directory_pattern: "{year}/{month}/{day}"

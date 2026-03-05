@@ -76,6 +76,8 @@ def run_archiver(source: Path, destination: Path, args) -> None:
             ignore_srt=args.ignore_srt,
             device_tag=args.device_tag,
             recent_days=args.recent,
+            filename_pattern=args.filename_pattern,
+            directory_pattern=args.directory_pattern,
         )
         archiver.run()
     except Exception as e:
@@ -168,11 +170,24 @@ Examples:
         action='store_true',
         help='Skip confirmation prompt when multiple source directories are detected'
     )
+    parser.add_argument(
+        '--filename-pattern',
+        type=str,
+        default=None,
+        help='Custom filename pattern using tokens: {year}, {month}, {day}, {hour}, {minute}, {second}, {device_type}, {device_tag}, {-device_tag}, {original}, {ext}'
+    )
+    parser.add_argument(
+        '--directory-pattern',
+        type=str,
+        default=None,
+        help='Custom directory pattern using tokens (default: {year}/{month}/{day})'
+    )
 
     # Apply config values as argparse defaults (CLI always overrides)
     config_defaults = {}
     for config_key in ('source', 'destination', 'skip_raw', 'overwrite',
-                        'ignore_srt', 'device_tag', 'recent', 'verbose', 'yes'):
+                        'ignore_srt', 'device_tag', 'recent', 'verbose', 'yes',
+                        'filename_pattern', 'directory_pattern'):
         if config_key in config:
             value = config[config_key]
             if config_key in ('source', 'destination') and isinstance(value, str):

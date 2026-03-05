@@ -91,6 +91,8 @@ python main.py
 | `--ignore-srt` | Skip DJI SRT subtitle/telemetry files |
 | `-y`, `--yes` | Skip confirmation prompt when multiple source directories are detected |
 | `--verbose` | Enable debug logging with timing diagnostics |
+| `--filename-pattern` | Custom filename pattern using tokens (see below) |
+| `--directory-pattern` | Custom directory structure pattern using tokens (see below) |
 
 ### Examples
 
@@ -147,6 +149,50 @@ Archive files and skip raw images:
 
 ```bash
 python main.py --source ./raw_media --destination ./archived_media --skip-raw
+```
+
+Use a custom filename pattern:
+
+```bash
+python main.py --source /Volumes/GoPro --destination ~/Videos/Archive \
+  --filename-pattern "{original}-{year}{month}{day}{-device_tag}"
+```
+
+### Custom Filename & Directory Patterns
+
+You can customize how output files are named and organized using pattern tokens.
+
+**Default patterns:**
+```yaml
+filename_pattern: "{year}{month}{day}-{hour}{minute}{second}-{device_type}{-device_tag}"
+directory_pattern: "{year}/{month}/{day}"
+```
+
+**Available tokens:**
+
+| Token | Example | Description |
+|-------|---------|-------------|
+| `{year}` | `2024` | 4-digit year |
+| `{month}` | `02` | Zero-padded month |
+| `{day}` | `15` | Zero-padded day |
+| `{hour}` | `14` | Zero-padded hour (24h) |
+| `{minute}` | `30` | Zero-padded minute |
+| `{second}` | `45` | Zero-padded second |
+| `{device_type}` | `video` | Detected device type (video, drone, audio, image, srt) |
+| `{device_tag}` | `mavic3` | From `--device-tag` (empty string if unset) |
+| `{-device_tag}` | `-mavic3` | Dash-prefixed tag (empty string if unset) |
+| `{original}` | `GOPR0001` | Original filename without extension |
+
+**Examples:**
+```yaml
+# Keep original filename with date prefix
+filename_pattern: "{year}{month}{day}-{original}"
+
+# Organize by device type instead of date
+directory_pattern: "{device_type}/{year}-{month}"
+
+# Simple date-only filenames
+filename_pattern: "{year}-{month}-{day}_{hour}{minute}{second}"
 ```
 
 ## How It Works

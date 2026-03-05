@@ -16,44 +16,64 @@ logger = logging.getLogger(__name__)
 class FileNamer:
     """Handles destination filename generation."""
 
-    def __init__(self, destination_dir: Path):
+    DEFAULT_FILENAME_PATTERN = "{year}{month}{day}-{hour}{minute}{second}-{device_type}{-device_tag}"
+    DEFAULT_DIRECTORY_PATTERN = "{year}/{month}/{day}"
+
+    def __init__(self, destination_dir: Path, filename_pattern: Optional[str] = None,
+                 directory_pattern: Optional[str] = None):
         self.destination_dir = destination_dir
+        self.filename_pattern = filename_pattern or self.DEFAULT_FILENAME_PATTERN
+        self.directory_pattern = directory_pattern or self.DEFAULT_DIRECTORY_PATTERN
 
-    def get_destination_filename(self, dt: datetime, original_extension: str, device_type: str, device_tag: Optional[str] = None) -> Path:
+    def _build_tokens(self, dt: datetime, device_type: str, device_tag: Optional[str],
+                      original_name: str) -> dict:
+        """Build the token dict for pattern expansion."""
+        return {
+            'year': dt.strftime('%Y'),
+            'month': dt.strftime('%m'),
+            'day': dt.strftime('%d'),
+            'hour': dt.strftime('%H'),
+            'minute': dt.strftime('%M'),
+            'second': dt.strftime('%S'),
+            'device_type': device_type,
+            'device_tag': device_tag or '',
+            '-device_tag': f'-{device_tag}' if device_tag else '',
+            'original': original_name,
+        }
+
+    def get_destination_filename(self, dt: datetime, original_extension: str, device_type: str,
+                                 device_tag: Optional[str] = None, original_name: str = '') -> Path:
         """
-        Generate a destination filename.
-
-        Format: <DESTINATION>/YYYY/MM/DD/YYYYMMDD-HHMMSS-<device_type>[-<device_tag>].ext
+        Generate a destination filename using configurable patterns.
 
         Args:
             dt: datetime object
             original_extension: file extension including dot (e.g., '.mp4')
             device_type: device type string (e.g., 'camera', 'drone', 'audio')
             device_tag: optional freeform tag to identify the source device
+            original_name: original filename without extension (e.g., 'GOPR0001')
 
         Returns:
             Path object for the destination file (base name without collision handling)
         """
-        # Create date-based subdirectory structure
-        year = dt.strftime('%Y')
-        month = dt.strftime('%m')
-        day = dt.strftime('%d')
-        date_dir = self.destination_dir / year / month / day
+        tokens = self._build_tokens(dt, device_type, device_tag, original_name)
+
+        # Expand directory pattern
+        dir_path = self.directory_pattern.format_map(tokens)
+        dest_dir = self.destination_dir / dir_path
 
         # Create directory if it doesn't exist
         try:
-            date_dir.mkdir(parents=True, exist_ok=True)
+            dest_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            logger.error(f"Failed to create directory {date_dir}: {e}")
+            logger.error(f"Failed to create directory {dest_dir}: {e}")
             raise
 
-        # Format base filename: YYYYMMDD-HHMMSS-<device_type>[-<device_tag>]
-        base_name = dt.strftime('%Y%m%d-%H%M%S') + f'-{device_type}'
-        if device_tag:
-            base_name += f'-{device_tag}'
+        # Expand filename pattern
+        base_name = self.filename_pattern.format_map(tokens)
         base_filename = base_name + original_extension
 
-        return date_dir / base_filename
+        return dest_dir / base_filename
 
     def get_next_available_filename(self, base_path: Path) -> Path:
         """
@@ -94,7 +114,7 @@ class Archiver:
 
     SUPPORTED_EXTENSIONS = {'.mp4', '.mov', '.m4a', '.wav', '.aac', '.jpg', '.jpeg', '.png', '.raw', '.dng', '.cr2', '.nef', '.arw', '.gpr', '.srt'}
 
-    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False, ignore_srt: bool = False, device_tag: Optional[str] = None, recent_days: Optional[int] = None):
+    def __init__(self, source_dir: Path, destination_dir: Path, skip_raw: bool = False, overwrite: bool = False, ignore_srt: bool = False, device_tag: Optional[str] = None, recent_days: Optional[int] = None, filename_pattern: Optional[str] = None, directory_pattern: Optional[str] = None):
         self.source_dir = Path(source_dir)
         self.destination_dir = Path(destination_dir)
         self.skip_raw = skip_raw
@@ -102,7 +122,7 @@ class Archiver:
         self.ignore_srt = ignore_srt
         self.device_tag = device_tag
         self.recent_days = recent_days
-        self.file_namer = FileNamer(self.destination_dir)
+        self.file_namer = FileNamer(self.destination_dir, filename_pattern, directory_pattern)
         self.metadata_extractor = MetadataExtractor()
 
     def run(self):
@@ -230,7 +250,7 @@ class Archiver:
         device_type = self.metadata_extractor.get_device_type(source_file, source_file.suffix)
 
         # Generate base destination filename (without collision handling)
-        base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type, self.device_tag)
+        base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type, self.device_tag, source_file.stem)
 
         # Check if destination already exists
         source_hash = None
