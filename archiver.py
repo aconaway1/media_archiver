@@ -85,11 +85,13 @@ class FileNamer:
         Returns:
             Path object for an available filename
         """
-        if not base_path.exists():
+        date_dir = base_path.parent
+        dir_names = {f.name for f in date_dir.iterdir()} if date_dir.exists() else set()
+
+        if base_path.name not in dir_names:
             return base_path
 
         # Handle collision with incrementing suffix
-        date_dir = base_path.parent
         base_name = base_path.stem
         extension = base_path.suffix
 
@@ -97,11 +99,9 @@ class FileNamer:
         counter = 1
         while counter < 1000:  # Safety limit
             collision_filename = f"{base_name}.{counter}{extension}"
-            collision_path = date_dir / collision_filename
-
-            if not collision_path.exists():
+            if collision_filename not in dir_names:
                 logger.info(f"Using collision-avoided filename: {collision_filename}")
-                return collision_path
+                return date_dir / collision_filename
 
             counter += 1
 
@@ -143,10 +143,22 @@ class Archiver:
         processed = 0
         skipped = 0
 
-        for idx, source_file in enumerate(sorted(media_files), 1):
+        # Build stem -> primary file map so SRTs can inherit their paired file's metadata
+        primary_by_stem = {
+            f.stem.upper(): f for f in media_files if f.suffix.lower() != '.srt'
+        }
+
+        # Process non-SRT files first so pairing is deterministic
+        sorted_files = sorted(media_files, key=lambda f: (f.suffix.lower() == '.srt', f.name))
+
+        for idx, source_file in enumerate(sorted_files, 1):
+            paired_primary = None
+            if source_file.suffix.lower() == '.srt':
+                paired_primary = primary_by_stem.get(source_file.stem.upper())
+
             try:
                 logger.debug(f"[{idx}/{len(media_files)}] Processing: {source_file.name}")
-                if self._process_file(source_file):
+                if self._process_file(source_file, paired_primary=paired_primary):
                     processed += 1
                 else:
                     skipped += 1
@@ -229,16 +241,19 @@ class Archiver:
 
         return media_files
 
-    def _process_file(self, source_file: Path) -> bool:
+    def _process_file(self, source_file: Path, paired_primary: Optional[Path] = None) -> bool:
         """
         Process a single media file.
 
         Returns:
             True if file was copied, False if skipped
         """
-        # Extract datetime from file
+        # SRT files inherit timestamp and device type from their paired primary file
+        # so that DJI_0001.SRT ends up with the same stem as DJI_0001.MP4
+        metadata_source = paired_primary if paired_primary is not None else source_file
+
         meta_start = time.time()
-        dt = self.metadata_extractor.get_datetime(source_file, source_file.suffix)
+        dt = self.metadata_extractor.get_datetime(metadata_source, metadata_source.suffix)
         meta_time = time.time() - meta_start
         logger.debug(f"Metadata extraction took {meta_time:.2f}s: {source_file.name}")
 
@@ -247,14 +262,19 @@ class Archiver:
             return False
 
         # Detect device type
-        device_type = self.metadata_extractor.get_device_type(source_file, source_file.suffix)
+        device_type = self.metadata_extractor.get_device_type(metadata_source, metadata_source.suffix)
 
         # Generate base destination filename (without collision handling)
         base_destination_file = self.file_namer.get_destination_filename(dt, source_file.suffix, device_type, self.device_tag, source_file.stem)
 
-        # Check if destination already exists
+        # Check if destination already exists.
+        # Use iterdir() rather than exists() so cloud-only Dropbox Smart Sync
+        # placeholders are detected (exists() can return False for evicted files).
+        dest_dir = base_destination_file.parent
+        dest_names = {f.name for f in dest_dir.iterdir()} if dest_dir.exists() else set()
+
         source_hash = None
-        if base_destination_file.exists():
+        if base_destination_file.name in dest_names:
             # Need source hash upfront for duplicate detection
             hash_start = time.time()
             source_hash = self._calculate_sha256(source_file)

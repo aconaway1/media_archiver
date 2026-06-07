@@ -225,7 +225,7 @@ def test_macos_metadata_filtering():
         print("\n✓ PASSED: macOS metadata files properly filtered out")
 
 def test_srt_file_handling():
-    """Test that SRT files are copied with '-srt' designation and --ignore-srt flag works."""
+    """Test that SRT files are paired with their primary file's name and --ignore-srt flag works."""
     print("\n" + "="*60)
     print("TEST 6: SRT file handling")
     print("="*60)
@@ -260,11 +260,17 @@ def test_srt_file_handling():
         srt_files = [f for f in copied if f.suffix == '.srt']
         assert len(srt_files) == 2, f"Expected 2 SRT files, got {len(srt_files)}"
 
-        # Verify SRT files have '-srt' designation
-        for srt in srt_files:
-            assert '-srt' in srt.name and srt.suffix == '.srt', f"SRT file should have '-srt' designation: {srt.name}"
+        mp4_files = [f for f in copied if f.suffix == '.mp4']
+        assert len(mp4_files) == 1, f"Expected 1 MP4 file, got {len(mp4_files)}"
 
-        print("✓ SRT files copied with '-srt' designation")
+        # Paired SRT should share its stem with the video; unpaired SRT keeps '-srt' designation
+        paired_srt = next(f for f in srt_files if 'srt' not in f.stem)
+        unpaired_srt = next(f for f in srt_files if 'srt' in f.stem)
+        assert paired_srt.stem == mp4_files[0].stem, \
+            f"Paired SRT stem {paired_srt.stem!r} should match video stem {mp4_files[0].stem!r}"
+        assert unpaired_srt.suffix == '.srt', f"Unpaired SRT should still be copied: {unpaired_srt.name}"
+
+        print("✓ Paired SRT shares stem with its primary video; unpaired SRT uses '-srt' designation")
 
         # Test 2: With --ignore-srt flag (SRT files should be skipped)
         print("\n--- Test 2: With --ignore-srt flag ---")
